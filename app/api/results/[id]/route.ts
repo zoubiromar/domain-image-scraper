@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-// This should match the store in the scrape route
-// In production, use a proper database or Redis
-const resultsStore = new Map<string, any>();
+import { resultsStore } from '@/lib/results-store';
 
 export async function GET(
   request: NextRequest,

@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
 import { MockScraper } from '@/lib/scraper';
-
-// Store results in memory (in production, use a database like Vercel KV)
-const resultsStore = new Map<string, any>();
+import { resultsStore } from '@/lib/results-store';
 
 export async function POST(request: NextRequest) {
   try {

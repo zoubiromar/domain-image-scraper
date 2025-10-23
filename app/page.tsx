@@ -67,7 +67,18 @@ export default function Home() {
 
       <footer className="mt-20 py-8 border-t border-gray-200">
         <div className="container mx-auto px-4 text-center text-gray-600">
-          <p>© 2024 Domain Image Scraper - Built with Next.js & Vercel</p>
+          <p>
+            © 2025 Domain Image Scraper - Built with Next.js & Vercel | 
+            Made by{' '}
+            <a 
+              href="https://github.com/zoubiromar" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-blue-600 hover:text-blue-800 font-medium transition-colors"
+            >
+              Omar Zoubir
+            </a>
+          </p>
         </div>
       </footer>
     </>
