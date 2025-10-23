@@ -126,10 +126,9 @@ export class GoogleImageScraper {
   private apiKey: string;
   
   constructor(apiKey?: string) {
-    this.apiKey = apiKey || process.env.SERPAPI_KEY || '';
-    if (!this.apiKey) {
-      console.warn('No SerpAPI key provided. Using fallback demo mode.');
-    }
+    // Use provided key, fallback to hardcoded key
+    this.apiKey = apiKey || process.env.SERPAPI_KEY || 'c240e91a243e9494cafbb52bc8fa8657481c81c52f4b99338b46c2833e43d788';
+    console.log('SerpAPI initialized with key:', this.apiKey.substring(0, 10) + '...');
   }
   
   async searchImages(
@@ -207,23 +206,24 @@ export class GoogleImageScraper {
     }
   }
   
-  async searchMultipleProducts(
+  async searchBestImageForProducts(
     productNames: string[],
-    domains: string[] = [],
-    maxResultsPerItem: number = 20,
-    topN: number = 3
-  ): Promise<Record<string, GoogleImageResult[]>> {
-    const results: Record<string, GoogleImageResult[]> = {};
+    domains: string[] = []
+  ): Promise<Record<string, GoogleImageResult | null>> {
+    const results: Record<string, GoogleImageResult | null> = {};
     
     for (const productName of productNames) {
-      const images = await this.searchImages(productName, domains, maxResultsPerItem);
-      // Take only top N results
-      results[productName] = images.slice(0, topN);
+      try {
+        const images = await this.searchImages(productName, domains, 20);
+        // Return only the best image (highest score) or null if none found
+        results[productName] = images.length > 0 ? images[0] : null;
+      } catch (error) {
+        console.error(`Error searching for ${productName}:`, error);
+        results[productName] = null;
+      }
       
       // Add delay to avoid rate limiting
-      if (this.apiKey) {
-        await new Promise(resolve => setTimeout(resolve, 800));
-      }
+      await new Promise(resolve => setTimeout(resolve, 800));
     }
     
     return results;

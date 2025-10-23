@@ -26,18 +26,16 @@ export async function POST(request: NextRequest) {
     // Generate task ID
     const taskId = uuidv4();
 
-    // Create scraper instance with SerpAPI key from environment
-    const scraper = new GoogleImageScraper(process.env.SERPAPI_KEY);
+    // Create scraper instance (API key is hardcoded in the class)
+    const scraper = new GoogleImageScraper();
     
     // Get storage instance
     const storage = getStorage();
     
-    // Start scraping with Google Image Search
-    const results = await scraper.searchMultipleProducts(
+    // Start scraping - get only the best image for each product
+    const results = await scraper.searchBestImageForProducts(
       item_names,
-      domains,
-      max_results_per_item || 20,
-      top_n || 3
+      domains
     );
 
     // Store results using persistent storage
