@@ -18,7 +18,7 @@ export default function Header() {
               Powered by Vercel
             </span>
             <a
-              href="https://github.com/yourusername/domain-image-scraper"
+              href="https://github.com/zoubiromar/domain-image-scraper"
               target="_blank"
               rel="noopener noreferrer"
               className="text-gray-600 hover:text-gray-900 transition-colors"

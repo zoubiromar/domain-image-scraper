@@ -15,7 +15,7 @@ A smart image scraping application that finds product images from specific e-com
 
 ## 🚀 Live Demo
 
-[View Live Demo](https://domain-image-scraper.vercel.app)
+[View Live Demo](https://domain-image-scraper.vercel.app) *(Coming soon)*
 
 ## 🛠️ Tech Stack
 
@@ -36,7 +36,7 @@ A smart image scraping application that finds product images from specific e-com
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/domain-image-scraper.git
+git clone https://github.com/zoubiromar/domain-image-scraper.git
 cd domain-image-scraper
 ```
 
@@ -58,7 +58,7 @@ npm run dev
 
 The easiest way to deploy is using Vercel:
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/yourusername/domain-image-scraper)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/zoubiromar/domain-image-scraper)
 
 ### Manual Deployment
 
@@ -195,10 +195,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📧 Contact
 
-Your Name - [@yourusername](https://twitter.com/yourusername)
+Zoubir Omar - [@zoubiromar](https://github.com/zoubiromar)
 
-Project Link: [https://github.com/yourusername/domain-image-scraper](https://github.com/yourusername/domain-image-scraper)
+Project Link: [https://github.com/zoubiromar/domain-image-scraper](https://github.com/zoubiromar/domain-image-scraper)
 
 ---
 
-Made with ❤️ by [Your Name]
+Made with ❤️ by Zoubir Omar
