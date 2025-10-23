@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
-import { MockScraper } from '@/lib/scraper';
-import { resultsStore } from '@/lib/results-store';
+import { RealScraper } from '@/lib/scraper-v2';
+import { getStorage } from '@/lib/storage';
 
 export async function POST(request: NextRequest) {
   try {
@@ -27,9 +27,12 @@ export async function POST(request: NextRequest) {
     const taskId = uuidv4();
 
     // Create scraper instance
-    const scraper = new MockScraper();
+    const scraper = new RealScraper();
     
-    // Start scraping (in production, this would be queued)
+    // Get storage instance
+    const storage = getStorage();
+    
+    // Start scraping with real images
     const results = await scraper.scrapeImages({
       itemNames: item_names,
       domains,
@@ -38,17 +41,12 @@ export async function POST(request: NextRequest) {
       topN: top_n,
     });
 
-    // Store results
-    resultsStore.set(taskId, {
+    // Store results using persistent storage
+    await storage.set(taskId, {
       status: 'completed',
       results,
       timestamp: new Date().toISOString(),
     });
-
-    // Clean old results after 10 minutes
-    setTimeout(() => {
-      resultsStore.delete(taskId);
-    }, 600000);
 
     return NextResponse.json({
       task_id: taskId,

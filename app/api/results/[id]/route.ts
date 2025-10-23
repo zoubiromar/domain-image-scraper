@@ -1,14 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { resultsStore } from '@/lib/results-store';
+import { getStorage } from '@/lib/storage';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   const taskId = params.id;
+  
+  // Get storage instance
+  const storage = getStorage();
 
   // Check if results exist
-  const result = resultsStore.get(taskId);
+  const result = await storage.get(taskId);
 
   if (!result) {
     return NextResponse.json(
