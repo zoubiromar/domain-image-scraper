@@ -56,22 +56,39 @@ export default function ResultsDisplay({ results }: Props) {
                       </div>
                       
                       <div className="flex justify-between">
-                        <span className="text-gray-500">Source:</span>
-                        <span className="text-blue-600">{image.source_domain}</span>
+                        <span className="text-gray-500">Domain:</span>
+                        <span className="text-blue-600 font-semibold">
+                          {(image as any).matched_domain || image.source_domain}
+                        </span>
                       </div>
                       
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Confidence:</span>
-                        <div className="flex items-center gap-1">
-                          <div className="w-20 bg-gray-200 rounded-full h-2">
-                            <div 
-                              className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full"
-                              style={{ width: `${image.confidence * 100}%` }}
-                            />
-                          </div>
-                          <span className="text-xs">{(image.confidence * 100).toFixed(0)}%</span>
+                      {(image as any).source_url && (
+                        <div className="pt-1">
+                          <a 
+                            href={(image as any).source_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-gray-500 hover:text-blue-600 underline"
+                          >
+                            View source page →
+                          </a>
                         </div>
-                      </div>
+                      )}
+                      
+                      {image.confidence && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Confidence:</span>
+                          <div className="flex items-center gap-1">
+                            <div className="w-20 bg-gray-200 rounded-full h-2">
+                              <div 
+                                className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full"
+                                style={{ width: `${image.confidence * 100}%` }}
+                              />
+                            </div>
+                            <span className="text-xs">{(image.confidence * 100).toFixed(0)}%</span>
+                          </div>
+                        </div>
+                      )}
                     </div>
                     
                     <a

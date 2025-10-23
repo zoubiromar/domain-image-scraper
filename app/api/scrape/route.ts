@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
-import { RealScraper } from '@/lib/scraper-v2';
+import { GoogleImageScraper } from '@/lib/google-image-scraper';
 import { getStorage } from '@/lib/storage';
 
 export async function POST(request: NextRequest) {
@@ -26,20 +26,19 @@ export async function POST(request: NextRequest) {
     // Generate task ID
     const taskId = uuidv4();
 
-    // Create scraper instance
-    const scraper = new RealScraper();
+    // Create scraper instance with SerpAPI key from environment
+    const scraper = new GoogleImageScraper(process.env.SERPAPI_KEY);
     
     // Get storage instance
     const storage = getStorage();
     
-    // Start scraping with real images
-    const results = await scraper.scrapeImages({
-      itemNames: item_names,
+    // Start scraping with Google Image Search
+    const results = await scraper.searchMultipleProducts(
+      item_names,
       domains,
-      extraKeyword: extra_keyword || '',
-      maxResults: max_results_per_item,
-      topN: top_n,
-    });
+      max_results_per_item || 20,
+      top_n || 3
+    );
 
     // Store results using persistent storage
     await storage.set(taskId, {
