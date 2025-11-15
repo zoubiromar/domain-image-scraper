@@ -7,57 +7,96 @@ let dbInitialized = false;
 export async function getDatabase(): Promise<any> {
   // Skip during build
   if (process.env.NEXT_PHASE === 'phase-production-build') {
+    console.log('[DB] Skipping database during build phase');
     return null;
   }
   
-  if (db && dbInitialized) return db;
+  if (db && dbInitialized) {
+    console.log('[DB] Using cached database');
+    return db;
+  }
+  
+  console.log('[DB] Initializing database...');
+  console.log('[DB] Environment:', process.env.VERCEL_ENV || 'local');
   
   try {
     const localPath = path.join(process.cwd(), 'public/database/products.db');
+    console.log('[DB] Checking local path:', localPath);
     
     // Try local file first (for development)
     if (fs.existsSync(localPath)) {
-      const Database = require('better-sqlite3');
-      db = new Database(localPath, { readonly: true });
-      dbInitialized = true;
-      console.log('✅ Database loaded from local file');
-      return db;
+      console.log('[DB] Local database file found');
+      try {
+        const Database = require('better-sqlite3');
+        db = new Database(localPath, { readonly: true });
+        dbInitialized = true;
+        console.log('✅ [DB] Database loaded from local file');
+        return db;
+      } catch (sqliteError) {
+        console.error('[DB] Error loading local database:', sqliteError);
+      }
+    } else {
+      console.log('[DB] Local database file not found');
     }
     
     // If not local, try Vercel Blob
     const blobUrl = process.env.DATABASE_BLOB_URL;
+    console.log('[DB] DATABASE_BLOB_URL environment variable:', blobUrl ? 'Set' : 'NOT SET');
+    console.log('[DB] Blob URL:', blobUrl);
+    
     if (blobUrl) {
-      console.log('📦 Downloading database from Vercel Blob...');
+      console.log('[DB] Attempting to fetch from Blob...');
       
-      // Fetch database from Blob
-      const response = await fetch(blobUrl);
-      
-      if (response.ok) {
-        const arrayBuffer = await response.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
+      try {
+        const response = await fetch(blobUrl);
+        console.log('[DB] Fetch response status:', response.status);
+        console.log('[DB] Fetch response OK:', response.ok);
         
-        // Save to tmp directory (Vercel has writable /tmp)
-        const tmpPath = '/tmp/products.db';
-        fs.writeFileSync(tmpPath, buffer);
-        
-        // Open database
-        const Database = require('better-sqlite3');
-        db = new Database(tmpPath, { readonly: true });
-        dbInitialized = true;
-        
-        console.log('✅ Database loaded from Vercel Blob');
-        return db;
+        if (response.ok) {
+          console.log('[DB] Downloading database...');
+          const arrayBuffer = await response.arrayBuffer();
+          const buffer = Buffer.from(arrayBuffer);
+          console.log('[DB] Downloaded', buffer.length, 'bytes');
+          
+          // Save to tmp directory (Vercel has writable /tmp)
+          const tmpPath = '/tmp/products.db';
+          fs.writeFileSync(tmpPath, buffer);
+          console.log('[DB] Saved to:', tmpPath);
+          
+          // Open database
+          try {
+            const Database = require('better-sqlite3');
+            db = new Database(tmpPath, { readonly: true });
+            dbInitialized = true;
+            
+            // Test query
+            const test = db.prepare('SELECT COUNT(*) as count FROM alcohol_products').get();
+            console.log('✅ [DB] Database loaded from Vercel Blob, alcohol products:', test);
+            
+            return db;
+          } catch (sqliteError) {
+            console.error('[DB] Error opening SQLite database:', sqliteError);
+            return null;
+          }
+        } else {
+          console.error('[DB] Fetch failed with status:', response.status);
+        }
+      } catch (fetchError) {
+        console.error('[DB] Fetch error:', fetchError);
       }
+    } else {
+      console.warn('[DB] No Blob URL configured');
     }
     
-    console.warn('⚠️ Database not available - no local file and no Blob URL');
+    console.warn('⚠️ [DB] Database not available - no local file and no successful Blob fetch');
     return null;
     
   } catch (error) {
-    console.error('❌ Database error:', error);
+    console.error('❌ [DB] Unexpected error:', error);
     return null;
   }
 }
+
 
 export interface Product {
   upc: string;
