@@ -229,6 +229,43 @@ export class GoogleImageScraper {
     return results;
   }
   
+  async searchTop3ImagesForProducts(
+    productNames: string[],
+    domains: string[] = [],
+    progressCallback?: (current: number, total: number) => void
+  ): Promise<Record<string, GoogleImageResult[]>> {
+    const results: Record<string, GoogleImageResult[]> = {};
+    
+    for (let i = 0; i < productNames.length; i++) {
+      const productName = productNames[i];
+      
+      if (progressCallback) {
+        progressCallback(i + 1, productNames.length);
+      }
+      
+      try {
+        const images = await this.searchImages(productName, domains, 20);
+        // Return top 3 images with score >= 5.0
+        const topImages = images.filter(img => img.score >= 5.0).slice(0, 3);
+        results[productName] = topImages;
+      } catch (error) {
+        console.error(`Error searching for ${productName}:`, error);
+        results[productName] = [];
+      }
+      
+      // Add delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 800));
+    }
+    
+    return results;
+  }
+  
+  // Calculate SerpAPI cost: $5 per 1000 searches
+  static calculateCost(numSearches: number): number {
+    const costPer1000 = 5.0;
+    return (numSearches / 1000) * costPer1000;
+  }
+  
   private generateDemoImages(productName: string, domains: string[]): GoogleImageResult[] {
     // Generate demo images that at least show the correct domain filtering
     const results: GoogleImageResult[] = [];
