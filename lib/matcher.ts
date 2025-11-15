@@ -161,7 +161,10 @@ export async function matchProducts(
       apiKey
     );
     
-    if (!gptResult.matchedName || gptResult.score < 5) {
+    console.log(`[GPT] Product: "${request.productName}" | Score: ${gptResult.score} | Matched: ${gptResult.matchedName || 'null'}`);
+    
+    // Reject only if score < 5
+    if (gptResult.score < 5) {
       results.push({
         productName: request.productName,
         matchedName: '',
@@ -174,23 +177,27 @@ export async function matchProducts(
       continue;
     }
     
-    // Find matched product
-    const matchedCandidate = goodCandidates.find(c => c.name === gptResult.matchedName);
+    // For scores >= 5, ALWAYS return match data (even if matchedName is null)
+    // Use best candidate if GPT didn't specify one
+    const matchedCandidate = gptResult.matchedName 
+      ? goodCandidates.find(c => c.name === gptResult.matchedName)
+      : goodCandidates[0]; // Use best candidate if GPT returned null
     
     if (!matchedCandidate) {
+      console.warn(`[MATCHER] No candidate found for "${request.productName}"`);
       results.push({
         productName: request.productName,
         matchedName: '',
         matchedUrl: '',
         matchedUpc: '',
         matchedPhotoId: '',
-        score: 0,
+        score: gptResult.score,
         logs: 'GPT match not found in candidates',
       });
       continue;
     }
     
-    // Success!
+    // Return match WITH data for scores >= 5
     results.push({
       productName: request.productName,
       matchedName: matchedCandidate.product.item_name,
