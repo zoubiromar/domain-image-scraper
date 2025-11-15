@@ -41,6 +41,18 @@ export default function URPCMatcher() {
   const [finalResults, setFinalResults] = useState<MatchResult[]>([]);
   const [apiStats, setApiStats] = useState({ embeddingCalls: 0, gptCalls: 0 });
 
+  // Debug logging for state changes
+  useEffect(() => {
+    console.log('[STATE] showReview changed to:', showReview);
+    console.log('[STATE] reviewQueue length:', reviewQueue.length);
+    console.log('[STATE] currentReviewIndex:', currentReviewIndex);
+    
+    if (showReview && reviewQueue.length > 0) {
+      console.log('✅ Review mode is ACTIVE');
+      console.log('Current item to review:', reviewQueue[currentReviewIndex]);
+    }
+  }, [showReview, reviewQueue, currentReviewIndex]);
+
   // Keyboard shortcuts for review
   useEffect(() => {
     if (!showReview || currentReviewIndex >= reviewQueue.length) return;
@@ -161,10 +173,21 @@ export default function URPCMatcher() {
       
       // Handle based on review mode
       if (reviewMode === 'interactive') {
+        console.log('📊 Interactive mode - analyzing results...');
+        console.log('Total results:', allBatchResults.length);
+        
         // Separate results by score
         const highConfidence = allBatchResults.filter(r => r.matchedName && r.score >= 9);
         const needsReview = allBatchResults.filter(r => r.matchedName && r.score < 9 && r.score >= 5);
         const lowScore = allBatchResults.filter(r => !r.matchedName || r.score < 5);
+        
+        console.log('High confidence (≥9):', highConfidence.length);
+        console.log('Needs review (5-8):', needsReview.length);
+        console.log('Low score (<5):', lowScore.length);
+        
+        if (needsReview.length > 0) {
+          console.log('Items to review:', needsReview.map(r => ({ name: r.productName, score: r.score })));
+        }
         
         setAutoAcceptedCount(highConfidence.length);
         
@@ -177,12 +200,23 @@ export default function URPCMatcher() {
         
         if (needsReview.length > 0) {
           // Show items that need review
+          console.log('✅ Starting interactive review for', needsReview.length, 'items');
+          console.log('Setting showReview to TRUE');
+          console.log('Review queue:', needsReview);
+          
           setReviewQueue(needsReview);
           setCurrentReviewIndex(0);
           setShowReview(true);
           setProcessing(false);
+          
+          // Alert to confirm review mode is activating
+          setTimeout(() => {
+            alert(`Interactive Review Ready!\n\n${needsReview.length} items need your review (score 5-8)\n${autoAcceptedCount} items were auto-accepted (score 9-10)\n\nReview cards will appear below. Use Keep/Reject buttons or keyboard shortcuts (Enter/Backspace).`);
+          }, 500);
         } else {
           // No items to review - show all results
+          console.log('ℹ️ No items need review - showing final results');
+          console.log('All items were either auto-accepted (≥9) or auto-rejected (<5)');
           setFinalResults([...initialAccepted, ...initialRejected]);
           setProcessing(false);
         }
@@ -271,11 +305,11 @@ export default function URPCMatcher() {
         </div>
 
         {/* Interactive Review Mode */}
-        {showReview && reviewQueue.length > 0 && currentReviewIndex < reviewQueue.length && (
+        {showReview && reviewQueue.length > 0 && currentReviewIndex < reviewQueue.length ? (
           <div className="mb-8">
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
               <p className="text-sm text-blue-800">
-                <strong>Interactive Review Mode:</strong> Reviewing uncertain matches (score 5-8). 
+                <strong>Interactive Review Mode:</strong> Reviewing uncertain matches (score 5-9). 
                 {autoAcceptedCount > 0 && ` ${autoAcceptedCount} high-confidence matches (score 9-10) were auto-accepted.`}
               </p>
             </div>
@@ -292,7 +326,13 @@ export default function URPCMatcher() {
               totalItems={reviewQueue.length}
             />
           </div>
-        )}
+        ) : showReview ? (
+          <div className="mb-8 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <p className="text-yellow-800">
+              DEBUG: Review mode active but no items to show. Queue length: {reviewQueue.length}, Index: {currentReviewIndex}
+            </p>
+          </div>
+        ) : null}
 
         {/* Configuration Form (hidden during review) */}
         {!showReview && (
