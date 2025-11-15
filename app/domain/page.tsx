@@ -22,7 +22,6 @@ interface SerpApiResult {
 
 interface CostTracker {
   serpApiCalls: number;
-  serpApiCost: number;
 }
 
 export default function DomainScraper() {
@@ -36,7 +35,10 @@ export default function DomainScraper() {
   const [processing, setProcessing] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0, phase: '' });
   const [results, setResults] = useState<SerpApiResult[]>([]);
-  const [cost, setCost] = useState<CostTracker>({ serpApiCalls: 0, serpApiCost: 0 });
+  const [cost, setCost] = useState<CostTracker>({ serpApiCalls: 0 });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [showOnlyWithImages, setShowOnlyWithImages] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -162,11 +164,11 @@ export default function DomainScraper() {
 
       setResults(reviewResults);
       setCost({
-        serpApiCalls: data.totalSearches,
-        serpApiCost: data.estimatedCost
+        serpApiCalls: data.totalSearches
       });
       setProgress({ current: productNames.length, total: productNames.length, phase: 'Complete' });
       setProcessing(false);
+      setCurrentPage(1); // Reset to first page when new results arrive
 
     } catch (error: any) {
       alert('Error: ' + (error.message || 'Scraping failed'));
@@ -404,92 +406,194 @@ export default function DomainScraper() {
           </div>
         )}
 
-        {/* Cost Tracker */}
+        {/* API Usage Tracker */}
         {cost.serpApiCalls > 0 && (
           <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
-            <h3 className="text-lg font-bold text-gray-800 mb-4">API Usage & Cost</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-blue-50 rounded-lg p-4">
-                <div className="text-sm text-gray-600">SerpAPI Calls</div>
-                <div className="text-2xl font-bold text-blue-600">{cost.serpApiCalls}</div>
-              </div>
-              <div className="bg-green-50 rounded-lg p-4">
-                <div className="text-sm text-gray-600">Estimated Cost</div>
-                <div className="text-2xl font-bold text-green-600">${cost.serpApiCost.toFixed(4)}</div>
-              </div>
+            <h3 className="text-lg font-bold text-gray-800 mb-4">API Usage</h3>
+            <div className="bg-blue-50 rounded-lg p-4 text-center">
+              <div className="text-sm text-gray-600 mb-1">SerpAPI Calls</div>
+              <div className="text-3xl font-bold text-blue-600">{cost.serpApiCalls}</div>
             </div>
           </div>
         )}
 
         {/* Results */}
-        {results.length > 0 && (
-          <div className="bg-white rounded-xl shadow-lg p-8">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-2xl font-bold text-gray-800">
-                Review & Select Images ({results.length} products)
-              </h3>
-              <button
-                onClick={handleDownloadResults}
-                className="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg flex items-center gap-2 transition-colors"
-              >
-                <FaDownload />
-                Download CSV
-              </button>
-            </div>
+        {results.length > 0 && (() => {
+          // Filter results based on checkbox
+          const filteredResults = showOnlyWithImages 
+            ? results.filter(r => r.images.length > 0)
+            : results;
+          
+          // Pagination calculations
+          const totalPages = Math.ceil(filteredResults.length / itemsPerPage);
+          const startIndex = (currentPage - 1) * itemsPerPage;
+          const endIndex = startIndex + itemsPerPage;
+          const paginatedResults = filteredResults.slice(startIndex, endIndex);
+          
+          const handlePreviousPage = () => {
+            setCurrentPage(prev => Math.max(1, prev - 1));
+          };
+          
+          const handleNextPage = () => {
+            setCurrentPage(prev => Math.min(totalPages, prev + 1));
+          };
+          
+          // Reset to page 1 if current page exceeds total pages
+          if (currentPage > totalPages && totalPages > 0) {
+            setCurrentPage(1);
+          }
+          
+          return (
+            <div className="bg-white rounded-xl shadow-lg p-8">
+              {/* Header with controls */}
+              <div className="flex justify-between items-center mb-6 flex-wrap gap-4">
+                <h3 className="text-2xl font-bold text-gray-800">
+                  Review & Select Images ({filteredResults.length} products)
+                </h3>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={handleDownloadResults}
+                    className="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg flex items-center gap-2 transition-colors"
+                  >
+                    <FaDownload />
+                    Download CSV
+                  </button>
+                  <select
+                    value={itemsPerPage}
+                    onChange={(e) => {
+                      setItemsPerPage(Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                    className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value={5}>5 per page</option>
+                    <option value={10}>10 per page</option>
+                    <option value={20}>20 per page</option>
+                    <option value={50}>50 per page</option>
+                  </select>
+                </div>
+              </div>
 
-            <div className="space-y-6">
-              {results.map((result, productIdx) => (
-                <div key={productIdx} className="border border-gray-200 rounded-lg p-6">
-                  <h4 className="font-bold text-lg text-gray-800 mb-4">{result.productName}</h4>
-                  
-                  {result.images.length === 0 ? (
-                    <div className="text-center py-8 text-gray-500">
-                      No images found (all results below threshold 0.3)
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      {result.images.map((img, imgIdx) => (
-                        <div
-                          key={imgIdx}
-                          onClick={() => handleImageSelect(productIdx, imgIdx)}
-                          className={`border-2 rounded-lg p-4 cursor-pointer transition-all ${
-                            result.selectedImage === imgIdx
-                              ? 'border-green-500 bg-green-50'
-                              : 'border-gray-200 hover:border-blue-300'
-                          }`}
-                        >
-                          {result.selectedImage === imgIdx && (
-                            <div className="flex justify-end mb-2">
-                              <div className="bg-green-500 text-white rounded-full p-1">
-                                <FaCheck size={12} />
+              {/* Filter checkbox */}
+              <div className="mb-6">
+                <label className="flex items-center gap-2 text-gray-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={showOnlyWithImages}
+                    onChange={(e) => {
+                      setShowOnlyWithImages(e.target.checked);
+                      setCurrentPage(1);
+                    }}
+                    className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                  />
+                  <span className="text-sm font-medium">Show only items with suggested images</span>
+                </label>
+              </div>
+
+              {/* Pagination controls - Top */}
+              {totalPages > 1 && (
+                <div className="flex justify-center items-center gap-4 mb-6 pb-4 border-b border-gray-200">
+                  <button
+                    onClick={handlePreviousPage}
+                    disabled={currentPage === 1}
+                    className="px-4 py-2 bg-gray-200 hover:bg-gray-300 disabled:bg-gray-100 disabled:text-gray-400 text-gray-700 font-medium rounded-lg transition-colors"
+                  >
+                    Previous
+                  </button>
+                  <span className="text-gray-700 font-semibold">
+                    Page {currentPage} / {totalPages}
+                  </span>
+                  <button
+                    onClick={handleNextPage}
+                    disabled={currentPage === totalPages}
+                    className="px-4 py-2 bg-gray-200 hover:bg-gray-300 disabled:bg-gray-100 disabled:text-gray-400 text-gray-700 font-medium rounded-lg transition-colors"
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
+
+              <div className="space-y-6">
+                {paginatedResults.map((result, productIdx) => {
+                  // Get original index for selection handlers
+                  const originalIdx = results.findIndex(r => r.productName === result.productName);
+                  return (
+                    <div key={productIdx} className="border border-gray-200 rounded-lg p-6">
+                      <h4 className="font-bold text-lg text-gray-800 mb-4">{result.productName}</h4>
+                      
+                      {result.images.length === 0 ? (
+                        <div className="text-center py-8 text-gray-500">
+                          No images found (all results below threshold 0.3)
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          {result.images.map((img, imgIdx) => (
+                            <div
+                              key={imgIdx}
+                              onClick={() => handleImageSelect(originalIdx, imgIdx)}
+                              className={`border-2 rounded-lg p-4 cursor-pointer transition-all ${
+                                result.selectedImage === imgIdx
+                                  ? 'border-green-500 bg-green-50'
+                                  : 'border-gray-200 hover:border-blue-300'
+                              }`}
+                            >
+                              {result.selectedImage === imgIdx && (
+                                <div className="flex justify-end mb-2">
+                                  <div className="bg-green-500 text-white rounded-full p-1">
+                                    <FaCheck size={12} />
+                                  </div>
+                                </div>
+                              )}
+                              <img
+                                src={img.thumbnail}
+                                alt={img.title}
+                                className="w-full h-48 object-contain mb-3 bg-gray-50 rounded"
+                              />
+                              <div className="text-sm">
+                                <div className="font-medium text-gray-700 truncate" title={img.title}>
+                                  {img.title}
+                                </div>
+                                <div className="text-gray-500 mt-1">
+                                  Score: <span className="font-semibold">{img.score.toFixed(2)}</span>
+                                </div>
+                                <div className="text-gray-500 truncate" title={img.source_domain}>
+                                  {img.source_domain}
+                                </div>
                               </div>
                             </div>
-                          )}
-                          <img
-                            src={img.thumbnail}
-                            alt={img.title}
-                            className="w-full h-48 object-contain mb-3 bg-gray-50 rounded"
-                          />
-                          <div className="text-sm">
-                            <div className="font-medium text-gray-700 truncate" title={img.title}>
-                              {img.title}
-                            </div>
-                            <div className="text-gray-500 mt-1">
-                              Score: <span className="font-semibold">{img.score.toFixed(2)}</span>
-                            </div>
-                            <div className="text-gray-500 truncate" title={img.source_domain}>
-                              {img.source_domain}
-                            </div>
-                          </div>
+                          ))}
                         </div>
-                      ))}
+                      )}
                     </div>
-                  )}
+                  );
+                })}
+              </div>
+
+              {/* Pagination controls - Bottom */}
+              {totalPages > 1 && (
+                <div className="flex justify-center items-center gap-4 mt-6 pt-4 border-t border-gray-200">
+                  <button
+                    onClick={handlePreviousPage}
+                    disabled={currentPage === 1}
+                    className="px-4 py-2 bg-gray-200 hover:bg-gray-300 disabled:bg-gray-100 disabled:text-gray-400 text-gray-700 font-medium rounded-lg transition-colors"
+                  >
+                    Previous
+                  </button>
+                  <span className="text-gray-700 font-semibold">
+                    Page {currentPage} / {totalPages}
+                  </span>
+                  <button
+                    onClick={handleNextPage}
+                    disabled={currentPage === totalPages}
+                    className="px-4 py-2 bg-gray-200 hover:bg-gray-300 disabled:bg-gray-100 disabled:text-gray-400 text-gray-700 font-medium rounded-lg transition-colors"
+                  >
+                    Next
+                  </button>
                 </div>
-              ))}
+              )}
             </div>
-          </div>
-        )}
+          );
+        })()}
       </main>
 
       <footer className="mt-20 py-8 border-t border-gray-200 bg-white/50">
