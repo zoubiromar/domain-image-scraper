@@ -5,8 +5,9 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "npm run build-db && next build",
+    "build": "next build",
     "build-db": "tsx scripts/build-database.ts",
+    "build-with-db": "npm run build-db && next build",
     "start": "next start",
     "lint": "next lint"
   },
