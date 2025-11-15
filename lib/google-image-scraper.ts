@@ -34,6 +34,25 @@ function normalizeText(s: string): string {
     .trim();
 }
 
+function normalizeDomain(domain: string): string {
+  // Remove protocol (http://, https://)
+  let normalized = domain.replace(/^https?:\/\//, '');
+  
+  // Remove www.
+  normalized = normalized.replace(/^www\./, '');
+  
+  // Remove trailing slashes and paths
+  normalized = normalized.split('/')[0];
+  
+  // Remove port numbers
+  normalized = normalized.split(':')[0];
+  
+  // Convert to lowercase and trim
+  normalized = normalized.toLowerCase().trim();
+  
+  return normalized;
+}
+
 function tokenize(s: string): string[] {
   return normalizeText(s).split(' ').filter(t => t);
 }
@@ -236,6 +255,10 @@ export class GoogleImageScraper {
   ): Promise<Record<string, GoogleImageResult[]>> {
     const results: Record<string, GoogleImageResult[]> = {};
     
+    // Normalize domains
+    const normalizedDomains = domains.map(d => normalizeDomain(d)).filter(d => d);
+    console.log('[SerpAPI] Normalized domains:', normalizedDomains);
+    
     for (let i = 0; i < productNames.length; i++) {
       const productName = productNames[i];
       
@@ -244,9 +267,18 @@ export class GoogleImageScraper {
       }
       
       try {
-        const images = await this.searchImages(productName, domains, 20);
-        // Return top 3 images with score >= 5.0
-        const topImages = images.filter(img => img.score >= 5.0).slice(0, 3);
+        const images = await this.searchImages(productName, normalizedDomains, 20);
+        console.log(`[SerpAPI] ${productName}: Found ${images.length} images`);
+        if (images.length > 0) {
+          console.log(`[SerpAPI] Top scores:`, images.slice(0, 5).map(img => ({
+            score: img.score,
+            title: img.title,
+            domain: img.source_domain
+          })));
+        }
+        // Return top 3 images with score >= 0.3 (scoring is 0-1 scale, not 0-10)
+        const topImages = images.filter(img => img.score >= 0.3).slice(0, 3);
+        console.log(`[SerpAPI] ${productName}: ${topImages.length} images above threshold 0.3`);
         results[productName] = topImages;
       } catch (error) {
         console.error(`Error searching for ${productName}:`, error);

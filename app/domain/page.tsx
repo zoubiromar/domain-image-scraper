@@ -31,7 +31,8 @@ export default function DomainScraper() {
   const [selectedColumn, setSelectedColumn] = useState<string>('');
   const [startRow, setStartRow] = useState<number>(1);
   const [rowLimit, setRowLimit] = useState<number>(10);
-  const [domains, setDomains] = useState<string>('');
+  const [domains, setDomains] = useState<string[]>([]);
+  const [currentDomain, setCurrentDomain] = useState<string>('');
   const [processing, setProcessing] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0, phase: '' });
   const [results, setResults] = useState<SerpApiResult[]>([]);
@@ -63,11 +64,42 @@ export default function DomainScraper() {
     });
   };
 
-  const parseDomains = (text: string): string[] => {
-    return text
-      .split(/[\n,;]+/)
-      .map(d => d.trim().toLowerCase())
-      .filter(d => d.length > 0);
+  const normalizeDomain = (domain: string): string => {
+    // Remove protocol (http://, https://)
+    let normalized = domain.replace(/^https?:\/\//, '');
+    
+    // Remove www.
+    normalized = normalized.replace(/^www\./, '');
+    
+    // Remove trailing slashes and paths
+    normalized = normalized.split('/')[0];
+    
+    // Remove port numbers
+    normalized = normalized.split(':')[0];
+    
+    // Convert to lowercase and trim
+    return normalized.toLowerCase().trim();
+  };
+
+  const handleAddDomain = () => {
+    if (currentDomain.trim()) {
+      const normalized = normalizeDomain(currentDomain);
+      if (normalized && !domains.includes(normalized)) {
+        setDomains([...domains, normalized]);
+        setCurrentDomain('');
+      }
+    }
+  };
+
+  const handleRemoveDomain = (index: number) => {
+    setDomains(domains.filter((_, i) => i !== index));
+  };
+
+  const handleDomainKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleAddDomain();
+    }
   };
 
   const handleStartScraping = async () => {
@@ -81,9 +113,8 @@ export default function DomainScraper() {
       return;
     }
 
-    const doms = parseDomains(domains);
-    if (doms.length === 0) {
-      alert('Please enter at least one domain');
+    if (domains.length === 0) {
+      alert('Please add at least one domain');
       return;
     }
 
@@ -109,7 +140,7 @@ export default function DomainScraper() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           productNames,
-          domains: doms
+          domains: domains // Already normalized
         })
       });
 
@@ -196,7 +227,7 @@ export default function DomainScraper() {
             Domain Web Scraper
           </h1>
           <p className="text-gray-600 mt-1">
-            Find top 3 product images from specific domains using Google Images (SerpAPI)
+            Find top 3 product images from specific domains using Google Images (SerpAPI, threshold: 0.3)
           </p>
         </div>
       </header>
@@ -287,16 +318,53 @@ export default function DomainScraper() {
             {/* Domains */}
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Target Domains (one per line or comma-separated)
+                Target Domains
               </label>
-              <textarea
-                value={domains}
-                onChange={(e) => setDomains(e.target.value)}
-                placeholder="Example:&#10;amazon.com&#10;walmart.com&#10;target.com"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-vertical"
-                rows={4}
-                disabled={processing}
-              />
+              <div className="flex gap-2 mb-3">
+                <input
+                  type="text"
+                  value={currentDomain}
+                  onChange={(e) => setCurrentDomain(e.target.value)}
+                  onKeyPress={handleDomainKeyPress}
+                  placeholder="Enter domain (e.g., metro.ca, www.amazon.com, https://walmart.com)"
+                  className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  disabled={processing}
+                />
+                <button
+                  onClick={handleAddDomain}
+                  disabled={processing || !currentDomain.trim()}
+                  className="bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white font-bold py-3 px-6 rounded-lg flex items-center justify-center transition-colors"
+                >
+                  <span className="text-2xl">+</span>
+                </button>
+              </div>
+              
+              {domains.length > 0 && (
+                <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                  <div className="text-sm text-gray-600 mb-2 font-medium">Added Domains ({domains.length}):</div>
+                  <div className="flex flex-wrap gap-2">
+                    {domains.map((domain, index) => (
+                      <div
+                        key={index}
+                        className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full flex items-center gap-2 text-sm"
+                      >
+                        <span>{domain}</span>
+                        <button
+                          onClick={() => handleRemoveDomain(index)}
+                          className="text-blue-600 hover:text-blue-800 font-bold"
+                          disabled={processing}
+                        >
+                          <FaTimes />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              <p className="text-xs text-gray-500 mt-2">
+                💡 You can enter domains with or without www. or https:// - they will be normalized automatically
+              </p>
             </div>
 
             {/* Start Button */}
@@ -376,7 +444,7 @@ export default function DomainScraper() {
                   
                   {result.images.length === 0 ? (
                     <div className="text-center py-8 text-gray-500">
-                      No images found (all results below threshold 5.0)
+                      No images found (all results below threshold 0.3)
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
