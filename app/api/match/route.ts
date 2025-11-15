@@ -1,8 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { matchProducts, MatchRequest } from '@/lib/matcher';
+import { getDatabase } from '@/lib/database';
 
 export async function POST(request: NextRequest) {
   try {
+    // Check if database is available
+    const db = getDatabase();
+    if (!db) {
+      return NextResponse.json(
+        { 
+          error: 'Database not available. The URPC database needs to be set up on this deployment. See URPC_DEPLOYMENT.md for instructions.',
+          databaseMissing: true
+        },
+        { status: 503 }
+      );
+    }
+    
     const body = await request.json();
     const { products, productType, apiKey } = body;
     

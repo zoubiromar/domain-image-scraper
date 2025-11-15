@@ -78,6 +78,12 @@ export default function URPCMatcher() {
       
       const data = await response.json();
       
+      if (data.databaseMissing) {
+        alert('⚠️ Database Not Available\n\nThe URPC database is not set up on this deployment.\n\nPlease use the tool locally with "npm run dev" or contact the administrator to set up the database on Vercel.');
+        setProcessing(false);
+        return;
+      }
+      
       if (data.success) {
         let finalResults = data.results;
         
@@ -95,10 +101,10 @@ export default function URPCMatcher() {
         
         alert(`Matching complete! Matched: ${matched}, Rejected: ${rejected}`);
       } else {
-        alert('Error: ' + data.error);
+        alert('Error: ' + (data.error || 'Unknown error occurred'));
       }
     } catch (error: any) {
-      alert('Error: ' + error.message);
+      alert('Error: ' + (error.message || 'Failed to connect to server'));
     } finally {
       setProcessing(false);
     }

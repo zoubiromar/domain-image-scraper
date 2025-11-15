@@ -33,6 +33,20 @@ export async function matchProducts(
   const results: MatchResult[] = [];
   const allProducts = getAllProducts(productType);
   
+  // Handle empty database
+  if (!allProducts || allProducts.length === 0) {
+    console.error('Database is empty or not available');
+    return requests.map(req => ({
+      productName: req.productName,
+      matchedName: '',
+      matchedUrl: '',
+      matchedUpc: '',
+      matchedPhotoId: '',
+      score: 0,
+      logs: 'Database not available',
+    }));
+  }
+  
   console.log(`Starting batch matching for ${requests.length} products against ${allProducts.length} database items`);
   
   // Stage 1: Fuzzy pre-filter for all products (parallel)
