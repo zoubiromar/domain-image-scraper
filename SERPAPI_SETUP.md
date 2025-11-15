@@ -1,80 +1,54 @@
-# 🔑 SerpAPI Setup Guide
+# SerpAPI Setup Guide
 
-## Why SerpAPI?
+## Overview
+The Domain Web Scraper now uses SerpAPI for Google Image searches, returning the top 3 images per product (with score ≥ 5.0).
 
-To perform **real Google Image searches** with domain filtering (just like the Python script), we need to use the Google Images API. SerpAPI provides this functionality with a free tier.
+## Features
+✅ CSV Upload with column selection  
+✅ Row range selection (Start Row + Rows to Process)  
+✅ Top 3 images per product (threshold: 5.0)  
+✅ Interactive image selection  
+✅ Cost tracking (SerpAPI: $5 per 1000 searches)  
+✅ Environment variable support for API key  
 
-## Getting Your Free API Key
+## Setting Up SERPAPI_KEY in Vercel
 
-1. **Sign up for free** at: https://serpapi.com/users/sign_up
-   - Use your email to create an account
-   - Free tier includes **100 searches per month**
+### Step 1: Get Your SerpAPI Key
+1. Go to [SerpAPI](https://serpapi.com/)
+2. Sign up or log in
+3. Copy your API key from the dashboard
 
-2. **Get your API key**:
-   - After signing up, go to: https://serpapi.com/manage-api-key
-   - Copy your API key
-
-## Setting Up Locally
-
-Create a file named `.env.local` in the project root with:
-
-```
-SERPAPI_KEY=your_api_key_here
-```
-
-## Setting Up on Vercel
-
+### Step 2: Add to Vercel Environment Variables
 1. Go to your Vercel project dashboard
 2. Navigate to **Settings** → **Environment Variables**
 3. Add a new variable:
    - **Name**: `SERPAPI_KEY`
-   - **Value**: Your SerpAPI key
-   - **Environment**: Production
+   - **Value**: Your SerpAPI key (e.g., `abc123def456...`)
+   - **Environments**: Select all (Production, Preview, Development)
+4. Click **Save**
 
-## How It Works
+### Step 3: Redeploy
+1. Go to **Deployments**
+2. Click the three dots on the latest deployment
+3. Click **Redeploy**
+4. Wait for the deployment to complete
 
-With the API key configured, the app will:
+## Pricing
+- **SerpAPI**: $5.00 per 1,000 searches
+- The app shows real-time cost tracking in the UI
 
-1. **Search Google Images** for your product names
-2. **Apply domain filtering** using Google's `site:` operator
-3. **Post-filter results** to ensure images come from your specified domains
-4. **Score and rank** images based on relevance (same algorithm as Python script)
+## Usage Example
+1. Upload a CSV with product names
+2. Select the column containing product names
+3. Set start row and number of rows to process
+4. Enter target domains (e.g., `amazon.com, walmart.com`)
+5. Click **Start Scraping**
+6. Review the top 3 images for each product
+7. Select your preferred image for each product
+8. Download the results as CSV
 
-## Without API Key (Demo Mode)
-
-If no API key is provided, the app falls back to demo mode with placeholder images that simulate the domain filtering behavior.
-
-## Features with SerpAPI
-
-- ✅ **Real Google Image Search** - Actual product images from Google
-- ✅ **Domain Filtering** - Only images from your specified domains
-- ✅ **Relevance Scoring** - Smart ranking based on product name match
-- ✅ **Source URLs** - Direct links to where images are hosted
-- ✅ **Image Metadata** - Dimensions, titles, and source information
-
-## Testing Your Setup
-
-After adding your API key:
-
-1. Enter a product name (e.g., "iPhone 15")
-2. Add domains (e.g., "apple.com, amazon.com")
-3. Click "Start Scraping"
-4. You should see **real product images from those domains**
-
-## Rate Limits
-
-- **Free tier**: 100 searches/month
-- **Delay between searches**: 800ms (built-in to avoid rate limiting)
-- **Upgrade options**: Available if you need more searches
-
-## Troubleshooting
-
-If you see placeholder images instead of real results:
-1. Check that your API key is correctly set
-2. Verify you haven't exceeded the monthly limit
-3. Check the browser console for any error messages
-
-## Support
-
-- SerpAPI Documentation: https://serpapi.com/images-results
-- API Status: https://serpapi.com/status
+## Notes
+- The scraper adds an 800ms delay between searches to avoid rate limiting
+- Results are filtered to show only images with score ≥ 5.0
+- You can process up to hundreds of products in one batch
+- The timeout has been extended to 5 minutes for large batches
