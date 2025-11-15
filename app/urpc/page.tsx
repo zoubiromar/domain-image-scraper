@@ -5,6 +5,7 @@ import { Upload, FileSpreadsheet, Settings, Download, ArrowLeft } from 'lucide-r
 import Papa from 'papaparse';
 import Link from 'next/link';
 import ReviewCard from '@/components/ReviewCard';
+import CostTracker from '@/components/CostTracker';
 
 // Ensure this page is dynamically rendered
 export const dynamic = 'force-dynamic';
@@ -38,6 +39,7 @@ export default function URPCMatcher() {
   const [progress, setProgress] = useState({ current: 0, total: 0, phase: '' });
   const [showReview, setShowReview] = useState(false);
   const [finalResults, setFinalResults] = useState<MatchResult[]>([]);
+  const [apiStats, setApiStats] = useState({ embeddingCalls: 0, gptCalls: 0 });
 
   // Keyboard shortcuts for review
   useEffect(() => {
@@ -148,29 +150,51 @@ export default function URPCMatcher() {
       setProgress({ current: products.length, total: products.length, phase: 'Complete!' });
       setAllResults(allBatchResults);
       
+      // Calculate API usage
+      const matchedCount = allBatchResults.filter(r => r.matchedName).length;
+      const estimatedEmbeddingCalls = products.length * 51; // Query + 50 candidates per product
+      const estimatedGPTCalls = matchedCount; // One GPT call per matched product
+      setApiStats({ 
+        embeddingCalls: estimatedEmbeddingCalls, 
+        gptCalls: estimatedGPTCalls 
+      });
+      
       // Handle based on review mode
       if (reviewMode === 'interactive') {
-        // Separate high-confidence from needs-review
+        // Separate results by score
         const highConfidence = allBatchResults.filter(r => r.matchedName && r.score >= 9);
         const needsReview = allBatchResults.filter(r => r.matchedName && r.score < 9 && r.score >= 5);
+        const lowScore = allBatchResults.filter(r => !r.matchedName || r.score < 5);
         
         setAutoAcceptedCount(highConfidence.length);
-        setReviewedResults([...highConfidence]); // Auto-accepted
+        
+        // Start with auto-accepted items
+        const initialAccepted = highConfidence.map(r => ({ ...r, logs: r.logs + ' (Auto-accepted)' }));
+        // Add low-score items as rejected
+        const initialRejected = lowScore.map(r => ({ ...r, logs: r.logs || 'Rejected (score < 5)' }));
+        
+        setReviewedResults([...initialAccepted, ...initialRejected]);
         
         if (needsReview.length > 0) {
+          // Show items that need review
           setReviewQueue(needsReview);
           setCurrentReviewIndex(0);
           setShowReview(true);
           setProcessing(false);
         } else {
-          // No items to review - all auto-accepted or rejected
-          setFinalResults(highConfidence);
+          // No items to review - show all results
+          setFinalResults([...initialAccepted, ...initialRejected]);
           setProcessing(false);
         }
       } else if (reviewMode === 'aionly') {
-        // AI Only mode - only keep score >= 9
-        const approved = allBatchResults.filter(r => r.matchedName && r.score >= 9);
-        setFinalResults(approved);
+        // AI Only mode - auto-accept >= 9, reject < 9
+        const approved = allBatchResults.filter(r => r.matchedName && r.score >= 9)
+          .map(r => ({ ...r, logs: 'AI Approved (score >= 9)' }));
+        const rejected = allBatchResults.filter(r => !r.matchedName || r.score < 9)
+          .map(r => ({ ...r, logs: `Rejected by AI Only (score: ${r.score}/10)` }));
+        
+        // Show ALL results (approved + rejected)
+        setFinalResults([...approved, ...rejected]);
         setProcessing(false);
       }
       
@@ -182,11 +206,13 @@ export default function URPCMatcher() {
 
   const handleKeep = () => {
     const currentItem = reviewQueue[currentReviewIndex];
-    setReviewedResults([...reviewedResults, currentItem]);
+    const keptItem = { ...currentItem, logs: currentItem.logs + ' (Kept by user)' };
+    const newReviewedResults = [...reviewedResults, keptItem];
+    setReviewedResults(newReviewedResults);
     
     if (currentReviewIndex + 1 >= reviewQueue.length) {
-      // Review complete
-      setFinalResults([...reviewedResults, currentItem]);
+      // Review complete - show ALL results
+      setFinalResults(newReviewedResults);
       setShowReview(false);
     } else {
       setCurrentReviewIndex(currentReviewIndex + 1);
@@ -194,11 +220,22 @@ export default function URPCMatcher() {
   };
 
   const handleReject = () => {
-    // Don't add to reviewed results (reject it)
+    const currentItem = reviewQueue[currentReviewIndex];
+    // Mark as rejected but still include in final results
+    const rejectedItem = { 
+      ...currentItem, 
+      matchedName: '', // Clear match data
+      matchedUrl: '',
+      matchedUpc: '',
+      matchedPhotoId: '',
+      logs: `Rejected by user (original score: ${currentItem.score}/10)` 
+    };
+    const newReviewedResults = [...reviewedResults, rejectedItem];
+    setReviewedResults(newReviewedResults);
     
     if (currentReviewIndex + 1 >= reviewQueue.length) {
-      // Review complete
-      setFinalResults(reviewedResults);
+      // Review complete - show ALL results (including rejected)
+      setFinalResults(newReviewedResults);
       setShowReview(false);
     } else {
       setCurrentReviewIndex(currentReviewIndex + 1);
@@ -527,29 +564,46 @@ export default function URPCMatcher() {
                     <th className="text-left p-3 font-semibold">UPC</th>
                     <th className="text-left p-3 font-semibold">Photo ID</th>
                     <th className="text-left p-3 font-semibold">Score</th>
+                    <th className="text-left p-3 font-semibold">Status</th>
                   </tr>
                 </thead>
                 <tbody>
                   {finalResults.map((result, i) => (
                     <tr key={i} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                       <td className="p-3 font-medium">{result.productName}</td>
-                      <td className="p-3">{result.matchedName}</td>
-                      <td className="p-3 font-mono text-xs">{result.matchedUpc}</td>
-                      <td className="p-3 font-mono text-xs">{result.matchedPhotoId}</td>
+                      <td className="p-3">{result.matchedName || <span className="text-gray-400 italic">No match</span>}</td>
+                      <td className="p-3 font-mono text-xs">{result.matchedUpc || '-'}</td>
+                      <td className="p-3 font-mono text-xs">{result.matchedPhotoId || '-'}</td>
                       <td className="p-3">
-                        <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
-                          result.score >= 9 ? 'bg-green-100 text-green-800' :
-                          result.score >= 7 ? 'bg-yellow-100 text-yellow-800' :
-                          result.score >= 5 ? 'bg-orange-100 text-orange-800' :
-                          'bg-red-100 text-red-800'
-                        }`}>
-                          {result.score.toFixed(1)}
-                        </span>
+                        {result.score > 0 ? (
+                          <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                            result.score >= 9 ? 'bg-green-100 text-green-800' :
+                            result.score >= 7 ? 'bg-yellow-100 text-yellow-800' :
+                            result.score >= 5 ? 'bg-orange-100 text-orange-800' :
+                            'bg-red-100 text-red-800'
+                          }`}>
+                            {result.score.toFixed(1)}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
                       </td>
+                      <td className="p-3 text-xs text-gray-600">{result.logs}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+            </div>
+            
+            {/* Cost Tracker */}
+            <div className="mt-6">
+              <CostTracker
+                totalProducts={finalResults.length}
+                matchedProducts={finalResults.filter(r => r.matchedName).length}
+                embeddingCalls={apiStats.embeddingCalls}
+                gptCalls={apiStats.gptCalls}
+                productType={productType}
+              />
             </div>
           </div>
         )}
