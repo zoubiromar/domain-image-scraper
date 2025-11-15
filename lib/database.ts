@@ -60,7 +60,7 @@ export async function getDatabase(): Promise<any> {
           
           // Save to tmp directory (Vercel has writable /tmp)
           const tmpPath = '/tmp/products.db';
-          fs.writeFileSync(tmpPath, buffer);
+          fs.writeFileSync(tmpPath, new Uint8Array(buffer));
           console.log('[DB] Saved to:', tmpPath);
           
           // Open database

@@ -51,7 +51,8 @@ export default function DomainScraper() {
           return;
         }
         
-        const cols = Object.keys(results.data[0]);
+        const firstRow = results.data[0] as Record<string, any>;
+        const cols = Object.keys(firstRow);
         setCsvData(results.data);
         setColumns(cols);
         setSelectedColumn(cols[0] || '');
