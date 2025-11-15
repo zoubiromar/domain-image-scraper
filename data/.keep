@@ -1,0 +1,6 @@
+# This directory contains the source XLSX files for database building
+# Files are too large for GitHub and should be uploaded to Vercel separately
+# Required files:
+# - URPC Alcohol Photos w photoIDs.xlsx
+# - URPC CnG (Alc_Snack_Drinks) Photos w photoIDs.xlsx
+

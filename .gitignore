@@ -40,3 +40,10 @@ next-env.d.ts
 .vscode/
 *.swp
 *.swo
+
+# Database (too large for GitHub - will be built on Vercel)
+public/database/products.db
+
+# Source data files (too large for GitHub)
+data/*.xlsx
+data/*.csv

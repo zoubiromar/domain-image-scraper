@@ -26,7 +26,7 @@ function tokenizeText(text: string): string[] {
 async function buildDatabase() {
   console.log('🔨 Building URPC Product Database...\n');
   
-  const sourceDir = path.join(__dirname, '../../');
+  const sourceDir = path.join(__dirname, '../data/');
   const dbPath = path.join(__dirname, '../public/database/products.db');
   
   // Ensure database directory exists
