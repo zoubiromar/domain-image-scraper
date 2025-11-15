@@ -221,13 +221,22 @@ export default function URPCMatcher() {
           setProcessing(false);
         }
       } else if (reviewMode === 'aionly') {
-        // AI Only mode - auto-accept >= 9, reject < 9
+        // AI Only mode - auto-accept >= 9, clear data for < 9
         const approved = allBatchResults.filter(r => r.matchedName && r.score >= 9)
           .map(r => ({ ...r, logs: 'AI Approved (score >= 9)' }));
-        const rejected = allBatchResults.filter(r => !r.matchedName || r.score < 9)
-          .map(r => ({ ...r, logs: `Rejected by AI Only (score: ${r.score}/10)` }));
         
-        // Show ALL results (approved + rejected)
+        const rejected = allBatchResults.filter(r => !r.matchedName || r.score < 9)
+          .map(r => ({
+            productName: r.productName,
+            matchedName: '', // Clear match data
+            matchedUrl: '',
+            matchedUpc: '',
+            matchedPhotoId: '',
+            score: r.score,
+            logs: `Rejected by AI Only (score: ${r.score}/10)`,
+          }));
+        
+        // Show ALL results (approved with data + rejected without data)
         setFinalResults([...approved, ...rejected]);
         setProcessing(false);
       }
