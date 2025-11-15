@@ -1,10 +1,14 @@
-import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
 
-let db: Database.Database | null = null;
+let db: any = null;
 
-export function getDatabase(): Database.Database | null {
+export function getDatabase(): any {
+  // Skip database in build/static generation
+  if (process.env.NEXT_PHASE === 'phase-production-build') {
+    return null;
+  }
+  
   if (!db) {
     try {
       const dbPath = path.join(process.cwd(), 'public/database/products.db');
@@ -15,6 +19,8 @@ export function getDatabase(): Database.Database | null {
         return null;
       }
       
+      // Dynamic import to avoid build issues
+      const Database = require('better-sqlite3');
       db = new Database(dbPath, { readonly: true });
     } catch (error) {
       console.error('Error opening database:', error);

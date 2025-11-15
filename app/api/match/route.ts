@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { matchProducts, MatchRequest } from '@/lib/matcher';
 import { getDatabase } from '@/lib/database';
 
+// Force dynamic rendering (don't pre-render during build)
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 export async function POST(request: NextRequest) {
   try {
     // Check if database is available
