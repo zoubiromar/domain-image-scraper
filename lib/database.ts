@@ -20,8 +20,13 @@ export function getDatabase(): any {
       }
       
       // Dynamic import to avoid build issues
-      const Database = require('better-sqlite3');
-      db = new Database(dbPath, { readonly: true });
+      try {
+        const Database = require('better-sqlite3');
+        db = new Database(dbPath, { readonly: true });
+      } catch (requireError) {
+        console.error('better-sqlite3 not available:', requireError);
+        return null;
+      }
     } catch (error) {
       console.error('Error opening database:', error);
       return null;
