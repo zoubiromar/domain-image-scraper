@@ -8,12 +8,12 @@ export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {
   try {
-    // Check if database is available
-    const db = getDatabase();
+    // Check if database is available (async now)
+    const db = await getDatabase();
     if (!db) {
       return NextResponse.json(
         { 
-          error: 'Database not available. The URPC database needs to be set up on this deployment. See URPC_DEPLOYMENT.md for instructions.',
+          error: 'Database not available. The URPC database needs to be set up on this deployment. Please ensure DATABASE_BLOB_URL environment variable is set.',
           databaseMissing: true
         },
         { status: 503 }
@@ -40,14 +40,6 @@ export async function POST(request: NextRequest) {
     if (!apiKey || typeof apiKey !== 'string') {
       return NextResponse.json(
         { error: 'OpenAI API key is required' },
-        { status: 400 }
-      );
-    }
-    
-    // Limit batch size
-    if (products.length > 200) {
-      return NextResponse.json(
-        { error: 'Maximum 200 products per batch' },
         { status: 400 }
       );
     }

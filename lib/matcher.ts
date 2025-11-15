@@ -31,7 +31,7 @@ export async function matchProducts(
   onProgress?: (current: number, total: number) => void
 ): Promise<MatchResult[]> {
   const results: MatchResult[] = [];
-  const allProducts = getAllProducts(productType);
+  const allProducts = await getAllProducts(productType);
   
   // Handle empty database
   if (!allProducts || allProducts.length === 0) {

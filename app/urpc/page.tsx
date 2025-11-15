@@ -17,7 +17,7 @@ export default function URPCMatcher() {
   const [reviewMode, setReviewMode] = useState<'interactive' | 'aionly'>('interactive');
   const [apiKey, setApiKey] = useState('');
   const [startRow, setStartRow] = useState(2);
-  const [rowLimit, setRowLimit] = useState(10);
+  const [rowLimit, setRowLimit] = useState(50);
   const [processing, setProcessing] = useState(false);
   const [results, setResults] = useState<any[]>([]);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
@@ -261,19 +261,21 @@ export default function URPCMatcher() {
                     className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Rows to Process (Max: 200)
-                  </label>
-                  <input
-                    type="number"
-                    value={rowLimit}
-                    onChange={(e) => setRowLimit(Math.min(Number(e.target.value), 200))}
-                    min={1}
-                    max={200}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Rows to Process
+                </label>
+                <input
+                  type="number"
+                  value={rowLimit}
+                  onChange={(e) => setRowLimit(Number(e.target.value))}
+                  min={1}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Recommended: 50-500 for optimal performance
+                </p>
+              </div>
               </div>
               
               {/* Review Mode */}
