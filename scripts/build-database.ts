@@ -113,7 +113,8 @@ async function buildDatabase() {
   });
   
   alcoholTransaction(alcoholData);
-  console.log(`✅ Inserted ${db.prepare('SELECT COUNT(*) as count FROM alcohol_products').get().count} alcohol products\n`);
+  const alcoholCount = db.prepare('SELECT COUNT(*) as count FROM alcohol_products').get() as { count: number };
+  console.log(`✅ Inserted ${alcoholCount.count} alcohol products\n`);
   
   // Load CnG data
   console.log('📦 Loading CnG data from XLSX...');
@@ -158,7 +159,8 @@ async function buildDatabase() {
   });
   
   cngTransaction(cngData);
-  console.log(`✅ Inserted ${db.prepare('SELECT COUNT(*) as count FROM cng_products').get().count} CnG products\n`);
+  const cngCount = db.prepare('SELECT COUNT(*) as count FROM cng_products').get() as { count: number };
+  console.log(`✅ Inserted ${cngCount.count} CnG products\n`);
   
   // Create indexes for fast lookups
   console.log('📊 Creating indexes...');

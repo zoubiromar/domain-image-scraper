@@ -97,7 +97,7 @@ export default function Home() {
                 </div>
                 <div className="flex items-center gap-2 text-sm">
                   <span className="w-2 h-2 bg-purple-500 rounded-full"></span>
-                  <span>Quality filtering (score >= 5.0)</span>
+                  <span>Quality filtering (score &gt;= 5.0)</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm">
                   <span className="w-2 h-2 bg-purple-500 rounded-full"></span>

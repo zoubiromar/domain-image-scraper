@@ -5,6 +5,9 @@ import { Upload, FileSpreadsheet, Settings, Download } from 'lucide-react';
 import Papa from 'papaparse';
 import Link from 'next/link';
 
+// Ensure this page is dynamically rendered
+export const dynamic = 'force-dynamic';
+
 export default function URPCMatcher() {
   const [file, setFile] = useState<File | null>(null);
   const [csvData, setCsvData] = useState<any[]>([]);
