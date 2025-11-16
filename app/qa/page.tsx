@@ -44,6 +44,17 @@ export default function QAPage() {
   // Results
   const [processedRows, setProcessedRows] = useState<any[]>([]);
   const [costs, setCosts] = useState<QACosts | null>(null);
+  const [debugLogs, setDebugLogs] = useState<string[]>([]);
+  const [showDebug, setShowDebug] = useState(false);
+
+  // ============================================================================
+  // DEBUG LOGGING
+  // ============================================================================
+
+  const addDebugLog = (message: string) => {
+    setDebugLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${message}`]);
+    console.log(message);
+  };
 
   // ============================================================================
   // FILE UPLOAD
@@ -120,6 +131,7 @@ export default function QAPage() {
     setProgress({ phase: 'Preparing...', current: 0, total: csvData.length });
     setProcessedRows([]);
     setCosts(null);
+    setDebugLogs([]);
 
     try {
       // Prepare rows
@@ -132,6 +144,9 @@ export default function QAPage() {
       }));
 
       // Call API
+      addDebugLog(`Starting processing for ${rows.length} rows`);
+      addDebugLog(`Name QA: ${runNameQA}, Image QA: ${runImageQA}, Model: ${model}`);
+
       const response = await fetch('/api/qa-process', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -147,16 +162,35 @@ export default function QAPage() {
         }),
       });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Processing failed');
+      addDebugLog(`Response status: ${response.status}, OK: ${response.ok}`);
+
+      // Read response as text first
+      const responseText = await response.text();
+      addDebugLog(`Response received (${responseText.length} chars)`);
+
+      // Try to parse as JSON
+      let data;
+      try {
+        data = JSON.parse(responseText);
+        addDebugLog('Response parsed successfully as JSON');
+      } catch (jsonError: any) {
+        addDebugLog('❌ FAILED TO PARSE JSON RESPONSE');
+        addDebugLog(`Response preview: ${responseText.substring(0, 200)}`);
+        throw new Error(`Server returned invalid JSON. Response preview: ${responseText.substring(0, 100)}`);
       }
 
-      const data = await response.json();
+      if (!response.ok) {
+        addDebugLog(`❌ API returned error: ${data.error}`);
+        throw new Error(data.error || 'Processing failed');
+      }
 
       if (data.status === 'error') {
+        addDebugLog(`❌ Processing error: ${data.error}`);
         throw new Error(data.error);
       }
+
+      addDebugLog(`✅ Processing complete. ${data.processedRows?.length} rows processed`);
+      addDebugLog(`💰 Total cost: $${data.costs?.totalCost.toFixed(4)}`);
 
       setProcessedRows(data.processedRows);
       setCosts(data.costs);
@@ -167,7 +201,8 @@ export default function QAPage() {
       });
       setProcessing(false);
     } catch (error: any) {
-      alert('Error: ' + (error.message || 'Processing failed'));
+      addDebugLog(`❌ ERROR: ${error.message}`);
+      alert('Error: ' + (error.message || 'Processing failed') + '\n\nCheck the Debug Logs section below for details.');
       setProcessing(false);
     }
   };
@@ -445,6 +480,28 @@ export default function QAPage() {
             )}
           </div>
         </div>
+
+        {/* Debug Panel */}
+        {debugLogs.length > 0 && (
+          <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-gray-800">Debug Logs</h3>
+              <button
+                onClick={() => setShowDebug(!showDebug)}
+                className="text-sm text-blue-600 hover:text-blue-700"
+              >
+                {showDebug ? 'Hide' : 'Show'} Details
+              </button>
+            </div>
+            {showDebug && (
+              <div className="bg-gray-900 text-green-400 p-4 rounded-lg overflow-auto max-h-96 text-xs font-mono">
+                {debugLogs.map((log, idx) => (
+                  <div key={idx}>{log}</div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Progress */}
         {processing && progress.total > 0 && (
