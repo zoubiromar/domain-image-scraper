@@ -140,10 +140,26 @@ export async function processNameQABatch(
   
   for (let i = 0; i < responses.length; i++) {
     const response = responses[i];
+    const rowInfo = `Row ${i + 1}: ${rows[i].itemName?.substring(0, 50) || 'unknown'}`;
     
     if (response.ok) {
       try {
-        const data = await response.json();
+        const responseText = await response.text();
+        let data;
+        
+        try {
+          data = JSON.parse(responseText);
+        } catch (jsonError: any) {
+          console.error(`[Name QA] Invalid JSON response for ${rowInfo}`);
+          console.error('Response preview:', responseText.substring(0, 200));
+          results.push({
+            score: 1,
+            errorTypes: ['API Error'],
+            comments: `Invalid JSON response from API`,
+            suggestion: '',
+          });
+          continue;
+        }
         
         // Track costs
         if (data.usage) {
@@ -155,7 +171,34 @@ export async function processNameQABatch(
         }
         
         // Parse result
-        const resultJson = JSON.parse(data.choices[0].message.content);
+        if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+          console.error(`[Name QA] Unexpected response structure for ${rowInfo}`);
+          results.push({
+            score: 1,
+            errorTypes: ['API Error'],
+            comments: `Unexpected API response structure`,
+            suggestion: '',
+          });
+          continue;
+        }
+
+        const messageContent = data.choices[0].message.content;
+        let resultJson;
+        
+        try {
+          resultJson = JSON.parse(messageContent);
+        } catch (contentError: any) {
+          console.error(`[Name QA] Failed to parse message content for ${rowInfo}`);
+          console.error('Content preview:', messageContent?.substring(0, 200));
+          results.push({
+            score: 1,
+            errorTypes: ['API Error'],
+            comments: `Failed to parse AI response`,
+            suggestion: '',
+          });
+          continue;
+        }
+
         results.push({
           score: resultJson.score || 1,
           errorTypes: resultJson.errorTypes || [],
@@ -163,14 +206,25 @@ export async function processNameQABatch(
           suggestion: resultJson.suggestion || '',
         });
       } catch (e: any) {
+        console.error(`[Name QA] Processing error for ${rowInfo}:`, e.message);
         results.push({
           score: 1,
           errorTypes: ['API Error'],
-          comments: `Error parsing response: ${e.message}`,
+          comments: `Error: ${e.message.substring(0, 50)}`,
           suggestion: '',
         });
       }
     } else {
+      // Try to get error details
+      let errorDetails = `Status ${response.status}`;
+      try {
+        const errorText = await response.text();
+        errorDetails = errorText.substring(0, 200);
+        console.error(`[Name QA] API Error for ${rowInfo}:`, errorDetails);
+      } catch (e) {
+        console.error(`[Name QA] Could not read error for ${rowInfo}`);
+      }
+      
       results.push({
         score: 1,
         errorTypes: ['API Error'],
