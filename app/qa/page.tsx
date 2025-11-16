@@ -135,7 +135,7 @@ export default function QAPage() {
 
     try {
       // Prepare rows
-      const rows = csvData.map((row: any) => ({
+      let allRows = csvData.map((row: any) => ({
         ...row,
         itemName: row[itemNameCol],
         size: row[sizeCol],
@@ -143,61 +143,113 @@ export default function QAPage() {
         imageUrl: runImageQA ? row[imageUrlCol] : undefined,
       }));
 
-      // Call API
-      addDebugLog(`Starting processing for ${rows.length} rows`);
+      // Determine rows to process
+      if (!processAll && rowCount > 0) {
+        allRows = allRows.slice(0, rowCount);
+      }
+
+      addDebugLog(`Starting processing for ${allRows.length} rows`);
       addDebugLog(`Name QA: ${runNameQA}, Image QA: ${runImageQA}, Model: ${model}`);
 
-      const response = await fetch('/api/qa-process', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          rows,
-          options: {
-            runNameQA,
-            runImageQA,
-            model,
-            apiKey,
-            rowCount: processAll ? undefined : rowCount,
-          },
-        }),
+      // ========================================================================
+      // CLIENT-SIDE BATCHING (to avoid payload too large)
+      // ========================================================================
+      const CLIENT_BATCH_SIZE = 50; // Process 50 rows per API call
+      const allProcessedRows: any[] = [];
+      const allCosts: any[] = [];
+      const totalBatches = Math.ceil(allRows.length / CLIENT_BATCH_SIZE);
+
+      addDebugLog(`Processing in ${totalBatches} batches of ${CLIENT_BATCH_SIZE} rows each`);
+
+      for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+        const batchStart = batchIndex * CLIENT_BATCH_SIZE;
+        const batchEnd = Math.min(batchStart + CLIENT_BATCH_SIZE, allRows.length);
+        const batchRows = allRows.slice(batchStart, batchEnd);
+
+        addDebugLog(`📦 Batch ${batchIndex + 1}/${totalBatches}: Processing rows ${batchStart + 1}-${batchEnd}`);
+        setProgress({
+          phase: `Processing batch ${batchIndex + 1}/${totalBatches}...`,
+          current: batchStart,
+          total: allRows.length,
+        });
+
+        const response = await fetch('/api/qa-process', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            rows: batchRows,
+            options: {
+              runNameQA,
+              runImageQA,
+              model,
+              apiKey,
+            },
+          }),
+        });
+
+        addDebugLog(`Batch ${batchIndex + 1} response: status ${response.status}`);
+
+        // Read response as text first
+        const responseText = await response.text();
+
+        // Try to parse as JSON
+        let data;
+        try {
+          data = JSON.parse(responseText);
+          addDebugLog(`Batch ${batchIndex + 1} parsed successfully`);
+        } catch (jsonError: any) {
+          addDebugLog(`❌ Batch ${batchIndex + 1} FAILED TO PARSE JSON`);
+          addDebugLog(`Response preview: ${responseText.substring(0, 200)}`);
+          throw new Error(`Batch ${batchIndex + 1} failed: ${responseText.substring(0, 100)}`);
+        }
+
+        if (!response.ok || data.status === 'error') {
+          addDebugLog(`❌ Batch ${batchIndex + 1} error: ${data.error}`);
+          throw new Error(data.error || `Batch ${batchIndex + 1} failed`);
+        }
+
+        // Collect results
+        allProcessedRows.push(...data.processedRows);
+        if (data.costs) {
+          allCosts.push(data.costs);
+        }
+
+        addDebugLog(`✅ Batch ${batchIndex + 1} complete: ${data.processedRows.length} rows processed`);
+      }
+
+      // ========================================================================
+      // COMBINE ALL BATCH RESULTS
+      // ========================================================================
+      addDebugLog(`🎉 All batches complete! Total rows: ${allProcessedRows.length}`);
+
+      // Combine costs from all batches
+      const combinedCosts = {
+        totalInputTokens: allCosts.reduce((sum, c) => sum + c.totalInputTokens, 0),
+        totalOutputTokens: allCosts.reduce((sum, c) => sum + c.totalOutputTokens, 0),
+        totalCost: allCosts.reduce((sum, c) => sum + c.totalCost, 0),
+        breakdown: {} as any,
+      };
+
+      // Merge breakdowns
+      allCosts.forEach(cost => {
+        Object.entries(cost.breakdown).forEach(([model, data]: [string, any]) => {
+          if (!combinedCosts.breakdown[model]) {
+            combinedCosts.breakdown[model] = { inputTokens: 0, outputTokens: 0, cost: 0 };
+          }
+          combinedCosts.breakdown[model].inputTokens += data.inputTokens;
+          combinedCosts.breakdown[model].outputTokens += data.outputTokens;
+          combinedCosts.breakdown[model].cost += data.cost;
+        });
       });
 
-      addDebugLog(`Response status: ${response.status}, OK: ${response.ok}`);
+      addDebugLog(`💰 Total cost: $${combinedCosts.totalCost.toFixed(4)}`);
 
-      // Read response as text first
-      const responseText = await response.text();
-      addDebugLog(`Response received (${responseText.length} chars)`);
-
-      // Try to parse as JSON
-      let data;
-      try {
-        data = JSON.parse(responseText);
-        addDebugLog('Response parsed successfully as JSON');
-      } catch (jsonError: any) {
-        addDebugLog('❌ FAILED TO PARSE JSON RESPONSE');
-        addDebugLog(`Response preview: ${responseText.substring(0, 200)}`);
-        throw new Error(`Server returned invalid JSON. Response preview: ${responseText.substring(0, 100)}`);
-      }
-
-      if (!response.ok) {
-        addDebugLog(`❌ API returned error: ${data.error}`);
-        throw new Error(data.error || 'Processing failed');
-      }
-
-      if (data.status === 'error') {
-        addDebugLog(`❌ Processing error: ${data.error}`);
-        throw new Error(data.error);
-      }
-
-      addDebugLog(`✅ Processing complete. ${data.processedRows?.length} rows processed`);
-      addDebugLog(`💰 Total cost: $${data.costs?.totalCost.toFixed(4)}`);
-
-      setProcessedRows(data.processedRows);
-      setCosts(data.costs);
+      setProcessedRows(allProcessedRows);
+      setCosts(combinedCosts);
       setProgress({
         phase: 'Complete',
-        current: data.rowsProcessed,
-        total: data.rowsProcessed,
+        current: allProcessedRows.length,
+        total: allProcessedRows.length,
       });
       setProcessing(false);
     } catch (error: any) {
