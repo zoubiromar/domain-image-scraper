@@ -79,7 +79,8 @@ export async function POST(request: NextRequest): Promise<NextResponse<QARespons
         const { results, costs } = await processNameQABatch(
           batch,
           options.model,
-          options.apiKey
+          options.apiKey,
+          options.customNameQARules
         );
 
         nameQAResults.push(...results);
@@ -110,7 +111,12 @@ export async function POST(request: NextRequest): Promise<NextResponse<QARespons
         }
 
         // Process image QA
-        const { result, cost } = await processImageQA(row, nameToCheck, options.apiKey);
+        const { result, cost } = await processImageQA(
+          row,
+          nameToCheck,
+          options.apiKey,
+          options.customImageQARules
+        );
         imageQAResults.push(result);
 
         if (cost) {

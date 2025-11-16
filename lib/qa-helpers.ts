@@ -1,7 +1,9 @@
 import {
   QA_CONFIG,
-  NAME_QA_PROMPT,
-  IMAGE_QA_PROMPT,
+  NAME_QA_SYSTEM_PROMPT,
+  NAME_QA_RULES,
+  IMAGE_QA_SYSTEM_PROMPT,
+  IMAGE_QA_RULES,
   MODEL_PRICING,
   QAModel,
   QA_OUTPUT_COLUMNS,
@@ -56,6 +58,8 @@ export interface QAOptions {
   model: QAModel;
   apiKey: string;
   rowCount?: number; // undefined = process all
+  customNameQARules?: string; // Custom rules for Name QA
+  customImageQARules?: string; // Custom rules for Image QA
 }
 
 // ============================================================================
@@ -99,9 +103,14 @@ export function validateQAInputs(options: QAOptions, rows: QARow[]): string | nu
 export async function processNameQABatch(
   rows: QARow[],
   model: QAModel,
-  apiKey: string
+  apiKey: string,
+  customRules?: string
 ): Promise<{ results: NameQAResult[]; costs: CostTracking[] }> {
   const costs: CostTracking[] = [];
+  
+  // Use custom rules if provided, otherwise use defaults
+  const rulesPrompt = customRules || NAME_QA_RULES;
+  const fullPrompt = NAME_QA_SYSTEM_PROMPT + '\n\n' + rulesPrompt;
   
   // Build parallel requests
   const requests = rows.map(row => {
@@ -117,7 +126,7 @@ export async function processNameQABatch(
         model,
         response_format: { type: 'json_object' },
         messages: [
-          { role: 'system', content: NAME_QA_PROMPT },
+          { role: 'system', content: fullPrompt },
           {
             role: 'user',
             content: JSON.stringify({
@@ -244,7 +253,8 @@ export async function processNameQABatch(
 export async function processImageQA(
   row: QARow,
   nameToCheck: string, // May be suggestion from Name QA
-  apiKey: string
+  apiKey: string,
+  customRules?: string
 ): Promise<{ result: ImageQAResult; cost?: CostTracking }> {
   if (!row.imageUrl || typeof row.imageUrl !== 'string' || !row.imageUrl.startsWith('http')) {
     return {
@@ -276,6 +286,10 @@ export async function processImageQA(
       };
     }
 
+    // Use custom rules if provided, otherwise use defaults
+    const rulesPrompt = customRules || IMAGE_QA_RULES;
+    const fullPrompt = IMAGE_QA_SYSTEM_PROMPT + '\n\n' + rulesPrompt;
+
     // Call vision API
     const apiResponse = await fetch(QA_CONFIG.apiUrl, {
       method: 'POST',
@@ -287,7 +301,7 @@ export async function processImageQA(
         model: 'gpt-4o',
         response_format: { type: 'json_object' },
         messages: [
-          { role: 'system', content: IMAGE_QA_PROMPT },
+          { role: 'system', content: fullPrompt },
           {
             role: 'user',
             content: [

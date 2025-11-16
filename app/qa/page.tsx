@@ -3,8 +3,8 @@
 import { useState, useRef } from 'react';
 import Papa from 'papaparse';
 import Link from 'next/link';
-import { FaUpload, FaPlay, FaDownload, FaSpinner, FaCheckCircle } from 'react-icons/fa';
-import { QA_MODELS, QAModel } from '@/lib/qa-config';
+import { FaUpload, FaPlay, FaDownload, FaSpinner, FaCheckCircle, FaCog, FaTimes } from 'react-icons/fa';
+import { QA_MODELS, QAModel, DEFAULT_PROMPTS } from '@/lib/qa-config';
 
 interface QAProgress {
   phase: string;
@@ -46,6 +46,11 @@ export default function QAPage() {
   const [costs, setCosts] = useState<QACosts | null>(null);
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
   const [showDebug, setShowDebug] = useState(false);
+
+  // Prompt Editing
+  const [showSettings, setShowSettings] = useState(false);
+  const [customNameQARules, setCustomNameQARules] = useState(DEFAULT_PROMPTS.nameQARules);
+  const [customImageQARules, setCustomImageQARules] = useState(DEFAULT_PROMPTS.imageQARules);
 
   // ============================================================================
   // DEBUG LOGGING
@@ -183,6 +188,8 @@ export default function QAPage() {
               runImageQA,
               model,
               apiKey,
+              customNameQARules,
+              customImageQARules,
             },
           }),
         });
@@ -306,7 +313,17 @@ export default function QAPage() {
       <main className="flex-1 container mx-auto px-4 py-8 max-w-7xl">
         {/* Configuration Form */}
         <div className="bg-white rounded-xl shadow-lg p-8 mb-8">
-          <h2 className="text-2xl font-bold text-gray-800 mb-6">Configuration</h2>
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-bold text-gray-800">Configuration</h2>
+            <button
+              onClick={() => setShowSettings(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors"
+              disabled={processing}
+            >
+              <FaCog />
+              <span className="text-sm font-medium">Edit AI Prompts</span>
+            </button>
+          </div>
 
           <div className="space-y-6">
             {/* CSV Upload */}
@@ -687,6 +704,106 @@ export default function QAPage() {
           </div>
         )}
       </main>
+
+      {/* Settings Modal */}
+      {showSettings && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            {/* Modal Header */}
+            <div className="flex justify-between items-center p-6 border-b border-gray-200 bg-gray-50">
+              <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                <FaCog className="text-blue-600" />
+                AI Prompt Settings
+              </h2>
+              <button
+                onClick={() => setShowSettings(false)}
+                className="text-gray-500 hover:text-gray-700 p-2 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                <FaTimes size={20} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto flex-1">
+              <p className="text-sm text-gray-600 mb-6">
+                Edit the verification rules below. The system instructions (role, input/output format) are fixed and cannot be changed.
+              </p>
+
+              {/* Name QA Rules */}
+              <div className="mb-6">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Name & Text QA Rules
+                </label>
+                <textarea
+                  value={customNameQARules}
+                  onChange={(e) => setCustomNameQARules(e.target.value)}
+                  className="w-full h-64 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-xs"
+                  placeholder="Enter custom rules..."
+                />
+                <div className="mt-2 flex gap-2">
+                  <button
+                    onClick={() => setCustomNameQARules(DEFAULT_PROMPTS.nameQARules)}
+                    className="text-xs text-blue-600 hover:text-blue-700"
+                  >
+                    Reset to Default
+                  </button>
+                </div>
+              </div>
+
+              {/* Image QA Rules */}
+              <div className="mb-6">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Image QA Rules
+                </label>
+                <textarea
+                  value={customImageQARules}
+                  onChange={(e) => setCustomImageQARules(e.target.value)}
+                  className="w-full h-64 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-xs"
+                  placeholder="Enter custom rules..."
+                />
+                <div className="mt-2 flex gap-2">
+                  <button
+                    onClick={() => setCustomImageQARules(DEFAULT_PROMPTS.imageQARules)}
+                    className="text-xs text-blue-600 hover:text-blue-700"
+                  >
+                    Reset to Default
+                  </button>
+                </div>
+              </div>
+
+              {/* Info Box */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm">
+                <p className="font-semibold text-blue-800 mb-2">ℹ️ How Prompts Work</p>
+                <ul className="text-blue-700 space-y-1 text-xs">
+                  <li>• <strong>System Prompt</strong> (fixed): Defines role, inputs, and JSON output format</li>
+                  <li>• <strong>Rules Prompt</strong> (editable): Your custom verification and scoring rules</li>
+                  <li>• Both are combined and sent to the AI for each request</li>
+                  <li>• Changes apply to the next QA run (not retroactive)</li>
+                </ul>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-6 border-t border-gray-200 bg-gray-50 flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setCustomNameQARules(DEFAULT_PROMPTS.nameQARules);
+                  setCustomImageQARules(DEFAULT_PROMPTS.imageQARules);
+                }}
+                className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg font-medium transition-colors"
+              >
+                Reset All to Defaults
+              </button>
+              <button
+                onClick={() => setShowSettings(false)}
+                className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+              >
+                Save & Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <footer className="mt-20 py-8 border-t border-gray-200 bg-white/50">
         <div className="container mx-auto px-4 text-center text-gray-600">
