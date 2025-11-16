@@ -29,7 +29,7 @@ export default function Home() {
           </p>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-8 mb-12">
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
           {/* URPC Matcher Card */}
           <Link href="/urpc" className="group">
             <div className="bg-white rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 p-8 border-2 border-gray-200 hover:border-blue-500 transform hover:-translate-y-1">
@@ -111,6 +111,47 @@ export default function Home() {
               </div>
             </div>
           </Link>
+
+          {/* Product QA Card */}
+          <Link href="/qa" className="group">
+            <div className="bg-white rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 p-8 border-2 border-gray-200 hover:border-green-500 transform hover:-translate-y-1">
+              <div className="mb-6">
+                <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-teal-600 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                  <span className="text-3xl">🔍</span>
+                </div>
+                <h3 className="text-2xl font-bold text-gray-800 mb-2">
+                  🔍 Product QA
+                </h3>
+                <p className="text-gray-600">
+                  Automated quality assurance for listings
+                </p>
+              </div>
+              
+              <div className="space-y-3 mb-6">
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                  <span>Name & text QA (Quebec market)</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                  <span>Image verification (vision AI)</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                  <span>Batch processing (30 items/batch)</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                  <span>Cost tracking & CSV export</span>
+                </div>
+              </div>
+              
+              <div className="flex items-center justify-between text-green-600 font-semibold group-hover:text-green-700">
+                <span>Start QA</span>
+                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              </div>
+            </div>
+          </Link>
         </div>
 
         {/* Info Section */}
@@ -118,7 +159,7 @@ export default function Home() {
           <h3 className="text-2xl font-bold text-gray-800 mb-4">
             Which Tool Should I Use?
           </h3>
-          <div className="grid md:grid-cols-2 gap-6 text-left">
+          <div className="grid md:grid-cols-3 gap-6 text-left">
             <div className="bg-white/70 backdrop-blur-sm rounded-lg p-6">
               <h4 className="font-bold text-blue-600 mb-2">Use URPC Matcher When:</h4>
               <ul className="space-y-2 text-sm text-gray-700">
@@ -137,6 +178,16 @@ export default function Home() {
                 <li>✓ Metro.ca, GiantTiger, Amazon, etc.</li>
                 <li>✓ E-commerce catalogs</li>
                 <li>✓ Want visual product images</li>
+              </ul>
+            </div>
+            <div className="bg-white/70 backdrop-blur-sm rounded-lg p-6">
+              <h4 className="font-bold text-green-600 mb-2">Use Product QA When:</h4>
+              <ul className="space-y-2 text-sm text-gray-700">
+                <li>✓ Validating product names (Quebec)</li>
+                <li>✓ Checking French/English translations</li>
+                <li>✓ Verifying product images</li>
+                <li>✓ Batch quality assurance</li>
+                <li>✓ Need detailed error reports</li>
               </ul>
             </div>
           </div>
