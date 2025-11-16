@@ -4,9 +4,11 @@ import { useState } from 'react';
 import Link from 'next/link';
 
 export default function QADebugPage() {
-  const [itemName, setItemName] = useState('Bar harbor Lobster bisque 429 ml');
-  const [size, setSize] = useState('429 ml');
-  const [rawData, setRawData] = useState('Bar harbor Lobster bisque 429 ml');
+  const [itemName, setItemName] = useState('Citrons biologiques / Organic Lemons');
+  const [size, setSize] = useState('1 ct');
+  const [rawData, setRawData] = useState('Organic Lemons');
+  const [imageUrl, setImageUrl] = useState('https://img.cdn4dd.com/cdn-cgi/image/fit=contain,width=1200,height=672,format=auto/https://doordash-static.s3.amazonaws.com/media/photosV2/facbd5dc-30ea-456e-9130-b61291153321-retina-large.jpg');
+  const [testMode, setTestMode] = useState<'name' | 'image'>('name');
   const [model, setModel] = useState('gpt-4o-mini');
   const [apiKey, setApiKey] = useState('');
   const [result, setResult] = useState<any>(null);
@@ -22,20 +24,60 @@ export default function QADebugPage() {
     setResult(null);
 
     try {
-      const response = await fetch('/api/qa-debug', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          itemName,
-          size,
-          rawData,
-          model,
-          apiKey,
-        }),
-      });
+      if (testMode === 'name') {
+        // Test Name QA
+        const response = await fetch('/api/qa-debug', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            itemName,
+            size,
+            rawData,
+            model,
+            apiKey,
+          }),
+        });
 
-      const data = await response.json();
-      setResult(data);
+        const data = await response.json();
+        setResult(data);
+      } else {
+        // Test Image QA
+        console.log('[Debug] Testing Image QA...');
+        const testResponse = await fetch('/api/qa-process', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            rows: [{
+              itemName,
+              size,
+              imageUrl,
+            }],
+            options: {
+              runNameQA: false,
+              runImageQA: true,
+              model: 'gpt-4o',
+              apiKey,
+            },
+          }),
+        });
+
+        const responseText = await testResponse.text();
+        console.log('[Debug] Image QA Response:', responseText.substring(0, 500));
+
+        let data;
+        try {
+          data = JSON.parse(responseText);
+        } catch (e: any) {
+          setResult({
+            status: 'error',
+            error: 'Response is not valid JSON',
+            responsePreview: responseText.substring(0, 500),
+          });
+          return;
+        }
+
+        setResult(data);
+      }
     } catch (error: any) {
       setResult({
         status: 'error',
@@ -59,6 +101,31 @@ export default function QADebugPage() {
           <h2 className="text-xl font-bold mb-4">Test Single QA Request</h2>
 
           <div className="space-y-4">
+            {/* Test Mode Selection */}
+            <div>
+              <label className="block text-sm font-medium mb-2">Test Mode</label>
+              <div className="flex gap-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    checked={testMode === 'name'}
+                    onChange={() => setTestMode('name')}
+                    className="w-4 h-4"
+                  />
+                  <span className="text-sm">Name QA (Text)</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    checked={testMode === 'image'}
+                    onChange={() => setTestMode('image')}
+                    className="w-4 h-4"
+                  />
+                  <span className="text-sm">Image QA (Vision)</span>
+                </label>
+              </div>
+            </div>
+
             <div>
               <label className="block text-sm font-medium mb-1">Item Name</label>
               <input
@@ -79,29 +146,46 @@ export default function QADebugPage() {
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium mb-1">Raw Data</label>
-              <input
-                type="text"
-                value={rawData}
-                onChange={(e) => setRawData(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg"
-              />
-            </div>
+            {testMode === 'name' && (
+              <div>
+                <label className="block text-sm font-medium mb-1">Raw Data</label>
+                <input
+                  type="text"
+                  value={rawData}
+                  onChange={(e) => setRawData(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-lg"
+                />
+              </div>
+            )}
 
-            <div>
-              <label className="block text-sm font-medium mb-1">Model</label>
-              <select
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg"
-              >
-                <option value="gpt-4o-mini">gpt-4o-mini</option>
-                <option value="gpt-4o">gpt-4o</option>
-                <option value="gpt-5-mini">gpt-5-mini</option>
-                <option value="gpt-5">gpt-5</option>
-              </select>
-            </div>
+            {testMode === 'image' && (
+              <div>
+                <label className="block text-sm font-medium mb-1">Image URL</label>
+                <input
+                  type="text"
+                  value={imageUrl}
+                  onChange={(e) => setImageUrl(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-lg text-xs"
+                  placeholder="https://..."
+                />
+              </div>
+            )}
+
+            {testMode === 'name' && (
+              <div>
+                <label className="block text-sm font-medium mb-1">Model</label>
+                <select
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-lg"
+                >
+                  <option value="gpt-4o-mini">gpt-4o-mini</option>
+                  <option value="gpt-4o">gpt-4o</option>
+                  <option value="gpt-5-mini">gpt-5-mini</option>
+                  <option value="gpt-5">gpt-5</option>
+                </select>
+              </div>
+            )}
 
             <div>
               <label className="block text-sm font-medium mb-1">API Key</label>
@@ -119,7 +203,7 @@ export default function QADebugPage() {
               disabled={loading}
               className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white py-3 rounded-lg font-medium"
             >
-              {loading ? 'Testing...' : 'Test QA Request'}
+              {loading ? 'Testing...' : `Test ${testMode === 'name' ? 'Name' : 'Image'} QA`}
             </button>
           </div>
         </div>
