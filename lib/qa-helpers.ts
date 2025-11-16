@@ -211,6 +211,17 @@ export async function processImageQA(
     const imageBase64 = Buffer.from(imageBuffer).toString('base64');
     const contentType = imageResponse.headers.get('content-type') || 'image/jpeg';
 
+    // Check image size (OpenAI has a limit of ~20MB for base64 images)
+    const imageSizeMB = imageBuffer.byteLength / (1024 * 1024);
+    if (imageSizeMB > 18) {
+      console.warn(`[Image QA] Image too large: ${imageSizeMB.toFixed(2)}MB for ${row.imageUrl}`);
+      return {
+        result: {
+          isMismatch: false,
+        },
+      };
+    }
+
     // Call vision API
     const apiResponse = await fetch(QA_CONFIG.apiUrl, {
       method: 'POST',
@@ -247,6 +258,15 @@ export async function processImageQA(
     });
 
     if (!apiResponse.ok) {
+      // Try to get error details
+      let errorText = `Status ${apiResponse.status}`;
+      try {
+        const errorData = await apiResponse.text();
+        errorText = errorData.substring(0, 200);
+      } catch (e) {
+        // Ignore if we can't read the error
+      }
+      console.error(`[Image QA] Vision API Error: ${errorText}`);
       throw new Error(`Vision API Error: ${apiResponse.status}`);
     }
 
@@ -266,6 +286,7 @@ export async function processImageQA(
     
     return { result: resultJson, cost };
   } catch (e: any) {
+    console.error(`[Image QA] Error processing image for ${row.imageUrl}:`, e.message);
     return {
       result: {
         isMismatch: false,
