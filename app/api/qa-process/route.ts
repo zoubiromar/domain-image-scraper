@@ -123,9 +123,9 @@ export async function POST(request: NextRequest): Promise<NextResponse<QARespons
           allCosts.push(cost);
         }
 
-        // Add a small delay to avoid rate limiting
+        // Add a small delay to avoid rate limiting (reduced to 200ms for faster processing)
         if (i < rowsToProcess.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 500));
+          await new Promise(resolve => setTimeout(resolve, 200));
         }
       }
 

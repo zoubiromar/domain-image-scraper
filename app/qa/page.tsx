@@ -157,14 +157,17 @@ export default function QAPage() {
       addDebugLog(`Name QA: ${runNameQA}, Image QA: ${runImageQA}, Model: ${model}`);
 
       // ========================================================================
-      // CLIENT-SIDE BATCHING (to avoid payload too large)
+      // CLIENT-SIDE BATCHING (to avoid payload too large and timeout)
       // ========================================================================
-      const CLIENT_BATCH_SIZE = 50; // Process 50 rows per API call
+      // Image QA is slower (vision API), use smaller batches to avoid 5-min Vercel timeout
+      // Each image takes ~25-30s, so 5 images = ~2.5min (safe under 5min limit)
+      const CLIENT_BATCH_SIZE = runImageQA ? 5 : 50; // 5 for Image QA, 50 for Name QA
       const allProcessedRows: any[] = [];
       const allCosts: any[] = [];
       const totalBatches = Math.ceil(allRows.length / CLIENT_BATCH_SIZE);
 
       addDebugLog(`Processing in ${totalBatches} batches of ${CLIENT_BATCH_SIZE} rows each`);
+      addDebugLog(`Batch size: ${CLIENT_BATCH_SIZE} (${runImageQA ? 'Image QA enabled - smaller batches to avoid timeout' : 'Name QA only - larger batches'})`);
 
       for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
         const batchStart = batchIndex * CLIENT_BATCH_SIZE;

@@ -168,3 +168,4 @@ Potential enhancements:
 **Bonus:** Added domain normalization + improved UI  
 **Result:** SerpAPI now works correctly! 🎉
 
+

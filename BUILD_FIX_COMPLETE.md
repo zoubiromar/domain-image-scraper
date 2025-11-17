@@ -167,3 +167,4 @@ Every function returns empty/null if database unavailable:
 
 **Check Vercel dashboard - build should complete now!** 🚀
 
+

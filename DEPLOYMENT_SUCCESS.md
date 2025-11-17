@@ -127,3 +127,4 @@ Once deployed, visit: https://domain-image-scraper.vercel.app
 
 **Check your Vercel dashboard - the build should succeed now!** 🎉
 
+
