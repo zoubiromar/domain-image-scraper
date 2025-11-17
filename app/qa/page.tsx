@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import Papa from 'papaparse';
 import Link from 'next/link';
 import { FaUpload, FaPlay, FaDownload, FaSpinner, FaCheckCircle, FaCog, FaTimes } from 'react-icons/fa';
@@ -51,6 +51,90 @@ export default function QAPage() {
   const [showSettings, setShowSettings] = useState(false);
   const [customNameQARules, setCustomNameQARules] = useState(DEFAULT_PROMPTS.nameQARules);
   const [customImageQARules, setCustomImageQARules] = useState(DEFAULT_PROMPTS.imageQARules);
+
+  // Progress Saving & Recovery
+  const [savedSessions, setSavedSessions] = useState<any[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
+
+  // ============================================================================
+  // PROGRESS SAVING & RECOVERY
+  // ============================================================================
+
+  const saveProgress = (
+    processedRows: any[],
+    costs: QACosts,
+    completed: boolean,
+    error?: string
+  ) => {
+    try {
+      const session = {
+        timestamp: new Date().toISOString(),
+        processedRows,
+        costs,
+        rowCount: processedRows.length,
+        completed,
+        error,
+        config: {
+          runNameQA,
+          runImageQA,
+          model,
+          itemNameCol,
+          sizeCol,
+        },
+      };
+
+      // Save to localStorage
+      const key = `qa_session_${Date.now()}`;
+      localStorage.setItem(key, JSON.stringify(session));
+      
+      // Update session list
+      const sessions = getAllSessions();
+      setSavedSessions(sessions);
+      
+      console.log('[Progress] Session saved:', key);
+    } catch (e) {
+      console.error('[Progress] Failed to save session:', e);
+    }
+  };
+
+  const getAllSessions = (): any[] => {
+    try {
+      const keys = Object.keys(localStorage).filter(k => k.startsWith('qa_session_'));
+      return keys.map(key => {
+        const data = localStorage.getItem(key);
+        return data ? { ...JSON.parse(data), key } : null;
+      }).filter(Boolean).sort((a, b) => 
+        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      );
+    } catch (e) {
+      return [];
+    }
+  };
+
+  const loadSession = (session: any) => {
+    setProcessedRows(session.processedRows);
+    setCosts(session.costs);
+    setShowHistory(false);
+    alert(`Loaded session from ${new Date(session.timestamp).toLocaleString()}\n${session.rowCount} rows recovered`);
+  };
+
+  const deleteSession = (key: string) => {
+    localStorage.removeItem(key);
+    setSavedSessions(getAllSessions());
+  };
+
+  const clearAllSessions = () => {
+    if (confirm('Clear all saved sessions? This cannot be undone.')) {
+      const keys = Object.keys(localStorage).filter(k => k.startsWith('qa_session_'));
+      keys.forEach(k => localStorage.removeItem(k));
+      setSavedSessions([]);
+    }
+  };
+
+  // Load sessions on mount
+  useEffect(() => {
+    setSavedSessions(getAllSessions());
+  }, []);
 
   // ============================================================================
   // DEBUG LOGGING
@@ -138,6 +222,10 @@ export default function QAPage() {
     setCosts(null);
     setDebugLogs([]);
 
+    // Declare outside try block so accessible in catch for error recovery
+    let allProcessedRows: any[] = [];
+    let allCosts: any[] = [];
+
     try {
       // Prepare rows
       let allRows = csvData.map((row: any) => ({
@@ -162,8 +250,6 @@ export default function QAPage() {
       // Image QA is slower (vision API), use smaller batches to avoid 5-min Vercel timeout
       // Each image takes ~25-30s, so 5 images = ~2.5min (safe under 5min limit)
       const CLIENT_BATCH_SIZE = runImageQA ? 5 : 50; // 5 for Image QA, 50 for Name QA
-      const allProcessedRows: any[] = [];
-      const allCosts: any[] = [];
       const totalBatches = Math.ceil(allRows.length / CLIENT_BATCH_SIZE);
 
       addDebugLog(`Processing in ${totalBatches} batches of ${CLIENT_BATCH_SIZE} rows each`);
@@ -225,6 +311,30 @@ export default function QAPage() {
         }
 
         addDebugLog(`✅ Batch ${batchIndex + 1} complete: ${data.processedRows.length} rows processed`);
+
+        // ========================================================================
+        // SAVE PROGRESS AFTER EACH BATCH (Recovery safeguard)
+        // ========================================================================
+        const partialCosts = {
+          totalInputTokens: allCosts.reduce((sum, c) => sum + c.totalInputTokens, 0),
+          totalOutputTokens: allCosts.reduce((sum, c) => sum + c.totalOutputTokens, 0),
+          totalCost: allCosts.reduce((sum, c) => sum + c.totalCost, 0),
+          breakdown: {} as any,
+        };
+
+        allCosts.forEach(cost => {
+          Object.entries(cost.breakdown).forEach(([model, data]: [string, any]) => {
+            if (!partialCosts.breakdown[model]) {
+              partialCosts.breakdown[model] = { inputTokens: 0, outputTokens: 0, cost: 0 };
+            }
+            partialCosts.breakdown[model].inputTokens += data.inputTokens;
+            partialCosts.breakdown[model].outputTokens += data.outputTokens;
+            partialCosts.breakdown[model].cost += data.cost;
+          });
+        });
+
+        saveProgress(allProcessedRows, partialCosts, false);
+        addDebugLog(`💾 Progress saved (${allProcessedRows.length}/${allRows.length} rows)`);
       }
 
       // ========================================================================
@@ -261,10 +371,49 @@ export default function QAPage() {
         current: allProcessedRows.length,
         total: allProcessedRows.length,
       });
+
+      // Save final completed session
+      saveProgress(allProcessedRows, combinedCosts, true);
+      addDebugLog(`💾 Final session saved - ${allProcessedRows.length} rows complete`);
+
       setProcessing(false);
     } catch (error: any) {
       addDebugLog(`❌ ERROR: ${error.message}`);
-      alert('Error: ' + (error.message || 'Processing failed') + '\n\nCheck the Debug Logs section below for details.');
+      
+      // ========================================================================
+      // SAVE PARTIAL RESULTS ON ERROR (Critical recovery feature)
+      // ========================================================================
+      if (allProcessedRows.length > 0) {
+        const partialCosts = {
+          totalInputTokens: allCosts.reduce((sum, c) => sum + c.totalInputTokens, 0),
+          totalOutputTokens: allCosts.reduce((sum, c) => sum + c.totalOutputTokens, 0),
+          totalCost: allCosts.reduce((sum, c) => sum + c.totalCost, 0),
+          breakdown: {} as any,
+        };
+
+        allCosts.forEach(cost => {
+          Object.entries(cost.breakdown).forEach(([model, data]: [string, any]) => {
+            if (!partialCosts.breakdown[model]) {
+              partialCosts.breakdown[model] = { inputTokens: 0, outputTokens: 0, cost: 0 };
+            }
+            partialCosts.breakdown[model].inputTokens += data.inputTokens;
+            partialCosts.breakdown[model].outputTokens += data.outputTokens;
+            partialCosts.breakdown[model].cost += data.cost;
+          });
+        });
+
+        saveProgress(allProcessedRows, partialCosts, false, error.message);
+        addDebugLog(`💾 PARTIAL RESULTS SAVED: ${allProcessedRows.length} rows recovered before error`);
+        
+        // Show recovered results
+        setProcessedRows(allProcessedRows);
+        setCosts(partialCosts);
+        
+        alert(`Error occurred but ${allProcessedRows.length} rows were saved!\n\nError: ${error.message}\n\nPartial results are displayed below and saved in History.\nYou can download them or load from History later.`);
+      } else {
+        alert('Error: ' + (error.message || 'Processing failed') + '\n\nCheck the Debug Logs section below for details.');
+      }
+
       setProcessing(false);
     }
   };
@@ -318,14 +467,29 @@ export default function QAPage() {
         <div className="bg-white rounded-xl shadow-lg p-8 mb-8">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-2xl font-bold text-gray-800">Configuration</h2>
-            <button
-              onClick={() => setShowSettings(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors"
-              disabled={processing}
-            >
-              <FaCog />
-              <span className="text-sm font-medium">Edit AI Prompts</span>
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowHistory(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-lg transition-colors relative"
+                disabled={processing}
+              >
+                <FaCheckCircle />
+                <span className="text-sm font-medium">History</span>
+                {savedSessions.length > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                    {savedSessions.length}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => setShowSettings(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors"
+                disabled={processing}
+              >
+                <FaCog />
+                <span className="text-sm font-medium">Edit AI Prompts</span>
+              </button>
+            </div>
           </div>
 
           <div className="space-y-6">
@@ -804,6 +968,94 @@ export default function QAPage() {
                 Save & Close
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* History Modal */}
+      {showHistory && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            {/* Modal Header */}
+            <div className="flex justify-between items-center p-6 border-b border-gray-200 bg-purple-50">
+              <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                <FaCheckCircle className="text-purple-600" />
+                Session History
+              </h2>
+              <button
+                onClick={() => setShowHistory(false)}
+                className="text-gray-500 hover:text-gray-700 p-2 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                <FaTimes size={20} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto flex-1">
+              {savedSessions.length === 0 ? (
+                <div className="text-center py-12 text-gray-500">
+                  <p className="text-lg mb-2">No saved sessions</p>
+                  <p className="text-sm">Process some rows and sessions will be saved automatically</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {savedSessions.map((session, idx) => (
+                    <div
+                      key={session.key}
+                      className="border border-gray-200 rounded-lg p-4 hover:border-purple-300 transition-colors"
+                    >
+                      <div className="flex justify-between items-start mb-3">
+                        <div>
+                          <div className="font-semibold text-gray-800">
+                            {new Date(session.timestamp).toLocaleString()}
+                          </div>
+                          <div className="text-sm text-gray-600 mt-1">
+                            {session.rowCount} rows • ${session.costs?.totalCost.toFixed(4)} • 
+                            {session.completed ? ' ✅ Completed' : ' ⚠️ Partial'}
+                            {session.error && ` • Error: ${session.error.substring(0, 50)}...`}
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => loadSession(session)}
+                            className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded-lg transition-colors"
+                          >
+                            Load
+                          </button>
+                          <button
+                            onClick={() => deleteSession(session.key)}
+                            className="px-3 py-1 bg-red-100 hover:bg-red-200 text-red-700 text-sm rounded-lg transition-colors"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        Config: {session.config?.runNameQA && 'Name QA'} {session.config?.runImageQA && 'Image QA'} • Model: {session.config?.model}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            {savedSessions.length > 0 && (
+              <div className="p-6 border-t border-gray-200 bg-gray-50 flex justify-between">
+                <button
+                  onClick={clearAllSessions}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors"
+                >
+                  Clear All History
+                </button>
+                <button
+                  onClick={() => setShowHistory(false)}
+                  className="px-6 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg font-medium transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
