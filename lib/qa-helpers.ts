@@ -4,6 +4,10 @@ import {
   NAME_QA_RULES,
   IMAGE_QA_SYSTEM_PROMPT,
   IMAGE_QA_RULES,
+  ENGLISH_TEXT_QA_SYSTEM_PROMPT,
+  ENGLISH_TEXT_QA_RULES,
+  ENGLISH_IMAGE_QA_SYSTEM_PROMPT,
+  ENGLISH_IMAGE_QA_RULES,
   MODEL_PRICING,
   QAModel,
   QA_OUTPUT_COLUMNS,
@@ -57,6 +61,7 @@ export interface QAOptions {
   runImageQA: boolean;
   model: QAModel;
   apiKey: string;
+  language: 'french' | 'english'; // Build language
   rowCount?: number; // undefined = process all
   customNameQARules?: string; // Custom rules for Name QA
   customImageQARules?: string; // Custom rules for Image QA
@@ -104,13 +109,20 @@ export async function processNameQABatch(
   rows: QARow[],
   model: QAModel,
   apiKey: string,
+  language: 'french' | 'english',
   customRules?: string
 ): Promise<{ results: NameQAResult[]; costs: CostTracking[] }> {
   const costs: CostTracking[] = [];
   
-  // Use custom rules if provided, otherwise use defaults
-  const rulesPrompt = customRules || NAME_QA_RULES;
-  const fullPrompt = NAME_QA_SYSTEM_PROMPT + '\n\n' + rulesPrompt;
+  // Select system prompt based on language
+  const systemPrompt = language === 'english' 
+    ? ENGLISH_TEXT_QA_SYSTEM_PROMPT 
+    : NAME_QA_SYSTEM_PROMPT;
+  
+  // Use custom rules if provided, otherwise use defaults for the language
+  const defaultRules = language === 'english' ? ENGLISH_TEXT_QA_RULES : NAME_QA_RULES;
+  const rulesPrompt = customRules || defaultRules;
+  const fullPrompt = systemPrompt + '\n\n' + rulesPrompt;
   
   // Build parallel requests
   const requests = rows.map(row => {
@@ -254,6 +266,7 @@ export async function processImageQA(
   row: QARow,
   nameToCheck: string, // May be suggestion from Name QA
   apiKey: string,
+  language: 'french' | 'english',
   customRules?: string
 ): Promise<{ result: ImageQAResult; cost?: CostTracking }> {
   if (!row.imageUrl || typeof row.imageUrl !== 'string' || !row.imageUrl.startsWith('http')) {
@@ -286,9 +299,15 @@ export async function processImageQA(
       };
     }
 
-    // Use custom rules if provided, otherwise use defaults
-    const rulesPrompt = customRules || IMAGE_QA_RULES;
-    const fullPrompt = IMAGE_QA_SYSTEM_PROMPT + '\n\n' + rulesPrompt;
+    // Select system prompt based on language
+    const systemPrompt = language === 'english'
+      ? ENGLISH_IMAGE_QA_SYSTEM_PROMPT
+      : IMAGE_QA_SYSTEM_PROMPT;
+    
+    // Use custom rules if provided, otherwise use defaults for the language
+    const defaultRules = language === 'english' ? ENGLISH_IMAGE_QA_RULES : IMAGE_QA_RULES;
+    const rulesPrompt = customRules || defaultRules;
+    const fullPrompt = systemPrompt + '\n\n' + rulesPrompt;
 
     // Call vision API
     const apiResponse = await fetch(QA_CONFIG.apiUrl, {

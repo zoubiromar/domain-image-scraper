@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Upload, FileSpreadsheet, Settings, Download, ArrowLeft } from 'lucide-react';
+import { Upload, FileSpreadsheet, Settings, Download, ArrowLeft, History, StopCircle } from 'lucide-react';
 import Papa from 'papaparse';
 import Link from 'next/link';
 import ReviewCard from '@/components/ReviewCard';
 import CostTracker from '@/components/CostTracker';
+import SessionHistory from '@/components/SessionHistory';
 
 // Ensure this page is dynamically rendered
 export const dynamic = 'force-dynamic';
@@ -40,6 +41,11 @@ export default function URPCMatcher() {
   const [showReview, setShowReview] = useState(false);
   const [finalResults, setFinalResults] = useState<MatchResult[]>([]);
   const [apiStats, setApiStats] = useState({ embeddingCalls: 0, gptCalls: 0 });
+  
+  // History and Cancel
+  const [savedSessions, setSavedSessions] = useState<any[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const [cancelRequested, setCancelRequested] = useState(false);
 
   // Debug logging for state changes
   useEffect(() => {

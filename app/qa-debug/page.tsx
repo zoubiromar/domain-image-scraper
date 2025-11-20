@@ -92,10 +92,10 @@ export default function QADebugPage() {
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-8">
       <div className="max-w-4xl mx-auto">
         <Link href="/qa" className="text-blue-600 hover:text-blue-700 mb-4 inline-block">
-          ← Back to QA
+          ← Back to QA Helper
         </Link>
 
-        <h1 className="text-3xl font-bold mb-8">QA Debug Tool</h1>
+        <h1 className="text-3xl font-bold mb-8">QA Helper Debug Tool</h1>
 
         <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
           <h2 className="text-xl font-bold mb-4">Test Single QA Request</h2>

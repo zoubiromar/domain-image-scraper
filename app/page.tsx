@@ -117,10 +117,10 @@ export default function Home() {
             <div className="bg-white rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 p-8 border-2 border-gray-200 hover:border-green-500 transform hover:-translate-y-1">
               <div className="mb-6">
                 <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-teal-600 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                  <span className="text-3xl">🔍</span>
+                  <span className="text-3xl">✨</span>
                 </div>
                 <h3 className="text-2xl font-bold text-gray-800 mb-2">
-                  🔍 Product QA
+                  ✨ QA Helper
                 </h3>
                 <p className="text-gray-600">
                   Automated quality assurance for listings
@@ -181,7 +181,7 @@ export default function Home() {
               </ul>
             </div>
             <div className="bg-white/70 backdrop-blur-sm rounded-lg p-6">
-              <h4 className="font-bold text-green-600 mb-2">Use Product QA When:</h4>
+              <h4 className="font-bold text-green-600 mb-2">Use QA Helper When:</h4>
               <ul className="space-y-2 text-sm text-gray-700">
                 <li>✓ Validating product names (Quebec)</li>
                 <li>✓ Checking French/English translations</li>

@@ -80,6 +80,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<QARespons
           batch,
           options.model,
           options.apiKey,
+          options.language || 'french',
           options.customNameQARules
         );
 
@@ -115,6 +116,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<QARespons
           row,
           nameToCheck,
           options.apiKey,
+          options.language || 'french',
           options.customImageQARules
         );
         imageQAResults.push(result);

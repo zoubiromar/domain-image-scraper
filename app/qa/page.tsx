@@ -4,7 +4,9 @@ import React, { useState, useRef, useEffect } from 'react';
 import Papa from 'papaparse';
 import Link from 'next/link';
 import { FaUpload, FaPlay, FaDownload, FaSpinner, FaCheckCircle, FaCog, FaTimes } from 'react-icons/fa';
-import { QA_MODELS, QAModel, DEFAULT_PROMPTS } from '@/lib/qa-config';
+import { QA_MODELS, QAModel, DEFAULT_PROMPTS, NAME_QA_SYSTEM_PROMPT, IMAGE_QA_SYSTEM_PROMPT, ENGLISH_TEXT_QA_SYSTEM_PROMPT, ENGLISH_IMAGE_QA_SYSTEM_PROMPT } from '@/lib/qa-config';
+import { QARule, getDefaultRules, buildPromptFromRules } from '@/lib/qa-rules';
+import RuleEditor from '@/components/RuleEditor';
 
 interface QAProgress {
   phase: string;
@@ -26,6 +28,7 @@ export default function QAPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Configuration
+  const [language, setLanguage] = useState<'french' | 'english'>('french');
   const [runNameQA, setRunNameQA] = useState(true);
   const [runImageQA, setRunImageQA] = useState(false);
   const [itemNameCol, setItemNameCol] = useState('');
@@ -49,8 +52,18 @@ export default function QAPage() {
 
   // Prompt Editing
   const [showSettings, setShowSettings] = useState(false);
-  const [customNameQARules, setCustomNameQARules] = useState(DEFAULT_PROMPTS.nameQARules);
-  const [customImageQARules, setCustomImageQARules] = useState(DEFAULT_PROMPTS.imageQARules);
+  const [settingsLanguage, setSettingsLanguage] = useState<'french' | 'english'>('french');
+  const [settingsQAType, setSettingsQAType] = useState<'text' | 'image'>('text');
+  
+  // Rule-based editing
+  const [textRulesFrench, setTextRulesFrench] = useState<QARule[]>(() => getDefaultRules('french', 'text'));
+  const [imageRulesFrench, setImageRulesFrench] = useState<QARule[]>(() => getDefaultRules('french', 'image'));
+  const [textRulesEnglish, setTextRulesEnglish] = useState<QARule[]>(() => getDefaultRules('english', 'text'));
+  const [imageRulesEnglish, setImageRulesEnglish] = useState<QARule[]>(() => getDefaultRules('english', 'image'));
+  
+  // Generated prompts from rules (for backward compatibility)
+  const [customNameQARules, setCustomNameQARules] = useState('');
+  const [customImageQARules, setCustomImageQARules] = useState('');
 
   // Progress Saving & Recovery
   const [savedSessions, setSavedSessions] = useState<any[]>([]);
@@ -135,6 +148,15 @@ export default function QAPage() {
   useEffect(() => {
     setSavedSessions(getAllSessions());
   }, []);
+
+  // Regenerate prompts when rules change
+  useEffect(() => {
+    const nameRules = language === 'english' ? textRulesEnglish : textRulesFrench;
+    const imageRules = language === 'english' ? imageRulesEnglish : imageRulesFrench;
+    
+    setCustomNameQARules(buildPromptFromRules(nameRules));
+    setCustomImageQARules(buildPromptFromRules(imageRules));
+  }, [language, textRulesFrench, imageRulesFrench, textRulesEnglish, imageRulesEnglish]);
 
   // ============================================================================
   // DEBUG LOGGING
@@ -277,6 +299,7 @@ export default function QAPage() {
               runImageQA,
               model,
               apiKey,
+              language,
               customNameQARules,
               customImageQARules,
             },
@@ -453,8 +476,8 @@ export default function QAPage() {
             ← Back to Home
           </Link>
           <h1 className="text-3xl font-bold text-gray-800 flex items-center gap-3">
-            <span className="text-2xl">🔍</span>
-            Product QA
+            <span className="text-2xl">✨</span>
+            QA Helper
           </h1>
           <p className="text-gray-600 mt-1">
             Automated quality assurance for product listings (Quebec market)
@@ -519,6 +542,38 @@ export default function QAPage() {
 
             {csvData.length > 0 && (
               <>
+                {/* Build Language Selection */}
+                <div className="border-t pt-6">
+                  <label className="block text-sm font-semibold text-gray-700 mb-3">
+                    Build Language
+                  </label>
+                  <div className="flex gap-6">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        checked={language === 'french'}
+                        onChange={() => setLanguage('french')}
+                        disabled={processing}
+                        className="w-4 h-4 text-blue-600 focus:ring-2 focus:ring-blue-500"
+                      />
+                      <span className="text-sm font-medium">🇫🇷 French & English</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        checked={language === 'english'}
+                        onChange={() => setLanguage('english')}
+                        disabled={processing}
+                        className="w-4 h-4 text-blue-600 focus:ring-2 focus:ring-blue-500"
+                      />
+                      <span className="text-sm font-medium">🇺🇸 English Only</span>
+                    </label>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">
+                    Select the language format of your product listings. This changes the QA rules and suggestion format.
+                  </p>
+                </div>
+
                 {/* QA Type Selection */}
                 <div className="border-t pt-6">
                   <label className="block text-sm font-semibold text-gray-700 mb-3">
@@ -892,70 +947,101 @@ export default function QAPage() {
 
             {/* Modal Body */}
             <div className="p-6 overflow-y-auto flex-1">
-              <p className="text-sm text-gray-600 mb-6">
-                Edit the verification rules below. The system instructions (role, input/output format) are fixed and cannot be changed.
-              </p>
-
-              {/* Name QA Rules */}
-              <div className="mb-6">
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Name & Text QA Rules
-                </label>
-                <textarea
-                  value={customNameQARules}
-                  onChange={(e) => setCustomNameQARules(e.target.value)}
-                  className="w-full h-64 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-xs"
-                  placeholder="Enter custom rules..."
-                />
-                <div className="mt-2 flex gap-2">
-                  <button
-                    onClick={() => setCustomNameQARules(DEFAULT_PROMPTS.nameQARules)}
-                    className="text-xs text-blue-600 hover:text-blue-700"
-                  >
-                    Reset to Default
-                  </button>
+              {/* Language and QA Type Selectors */}
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Build Language
+                  </label>
+                  <div className="flex gap-3">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        checked={settingsLanguage === 'french'}
+                        onChange={() => setSettingsLanguage('french')}
+                        className="w-4 h-4"
+                      />
+                      <span className="text-sm">French</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        checked={settingsLanguage === 'english'}
+                        onChange={() => setSettingsLanguage('english')}
+                        className="w-4 h-4"
+                      />
+                      <span className="text-sm">English</span>
+                    </label>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    QA Type
+                  </label>
+                  <div className="flex gap-3">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        checked={settingsQAType === 'text'}
+                        onChange={() => setSettingsQAType('text')}
+                        className="w-4 h-4"
+                      />
+                      <span className="text-sm">Text QA</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        checked={settingsQAType === 'image'}
+                        onChange={() => setSettingsQAType('image')}
+                        className="w-4 h-4"
+                      />
+                      <span className="text-sm">Image QA</span>
+                    </label>
+                  </div>
                 </div>
               </div>
 
-              {/* Image QA Rules */}
-              <div className="mb-6">
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Image QA Rules
-                </label>
-                <textarea
-                  value={customImageQARules}
-                  onChange={(e) => setCustomImageQARules(e.target.value)}
-                  className="w-full h-64 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-xs"
-                  placeholder="Enter custom rules..."
-                />
-                <div className="mt-2 flex gap-2">
-                  <button
-                    onClick={() => setCustomImageQARules(DEFAULT_PROMPTS.imageQARules)}
-                    className="text-xs text-blue-600 hover:text-blue-700"
-                  >
-                    Reset to Default
-                  </button>
-                </div>
-              </div>
-
-              {/* Info Box */}
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm">
-                <p className="font-semibold text-blue-800 mb-2">ℹ️ How Prompts Work</p>
-                <ul className="text-blue-700 space-y-1 text-xs">
-                  <li>• <strong>System Prompt</strong> (fixed): Defines role, inputs, and JSON output format</li>
-                  <li>• <strong>Rules Prompt</strong> (editable): Your custom verification and scoring rules</li>
-                  <li>• Both are combined and sent to the AI for each request</li>
-                  <li>• Changes apply to the next QA run (not retroactive)</li>
-                </ul>
-              </div>
+              {/* Rule Editor Component */}
+              <RuleEditor
+                rules={
+                  settingsLanguage === 'french'
+                    ? (settingsQAType === 'text' ? textRulesFrench : imageRulesFrench)
+                    : (settingsQAType === 'text' ? textRulesEnglish : imageRulesEnglish)
+                }
+                systemPrompt={
+                  settingsLanguage === 'french'
+                    ? (settingsQAType === 'text' ? NAME_QA_SYSTEM_PROMPT : IMAGE_QA_SYSTEM_PROMPT)
+                    : (settingsQAType === 'text' ? ENGLISH_TEXT_QA_SYSTEM_PROMPT : ENGLISH_IMAGE_QA_SYSTEM_PROMPT)
+                }
+                onRulesChange={(updatedRules) => {
+                  if (settingsLanguage === 'french') {
+                    if (settingsQAType === 'text') {
+                      setTextRulesFrench(updatedRules);
+                    } else {
+                      setImageRulesFrench(updatedRules);
+                    }
+                  } else {
+                    if (settingsQAType === 'text') {
+                      setTextRulesEnglish(updatedRules);
+                    } else {
+                      setImageRulesEnglish(updatedRules);
+                    }
+                  }
+                }}
+                language={settingsLanguage}
+                qaType={settingsQAType}
+              />
             </div>
 
             {/* Modal Footer */}
             <div className="p-6 border-t border-gray-200 bg-gray-50 flex justify-end gap-3">
               <button
                 onClick={() => {
-                  setCustomNameQARules(DEFAULT_PROMPTS.nameQARules);
-                  setCustomImageQARules(DEFAULT_PROMPTS.imageQARules);
+                  // Reset all rules to defaults
+                  setTextRulesFrench(getDefaultRules('french', 'text'));
+                  setImageRulesFrench(getDefaultRules('french', 'image'));
+                  setTextRulesEnglish(getDefaultRules('english', 'text'));
+                  setImageRulesEnglish(getDefaultRules('english', 'image'));
                 }}
                 className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg font-medium transition-colors"
               >
