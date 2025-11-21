@@ -1,10 +1,22 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Papa from 'papaparse';
 import Link from 'next/link';
 import { FaUpload, FaPlay, FaTimes, FaCheck, FaDownload, FaSpinner, FaHistory, FaStopCircle } from 'react-icons/fa';
 import SessionHistory from '@/components/SessionHistory';
+import {
+  createJob,
+  updateJobProgress,
+  completeJob,
+  cancelJob,
+  errorJob,
+  getJob,
+  getAllJobs,
+  deleteJob,
+  clearAllJobs,
+} from '@/lib/job-manager';
 
 interface SerpApiResult {
   productName: string;
@@ -26,7 +38,10 @@ interface CostTracker {
 }
 
 export default function DomainScraper() {
+  const router = useRouter();
+  
   const [csvData, setCsvData] = useState<any[]>([]);
+  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   const [columns, setColumns] = useState<string[]>([]);
   const [selectedColumn, setSelectedColumn] = useState<string>('');
   const [startRow, setStartRow] = useState<number>(1);
@@ -69,13 +84,18 @@ export default function DomainScraper() {
 
   const loadSessions = () => {
     try {
-      const keys = Object.keys(localStorage).filter(k => k.startsWith('domain_session_'));
-      const sessions = keys.map(key => {
-        const data = localStorage.getItem(key);
-        return data ? { ...JSON.parse(data), key } : null;
-      }).filter(Boolean).sort((a, b) => 
-        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-      );
+      const jobs = getAllJobs('domain');
+      const sessions = jobs.map(job => ({
+        key: `job_${job.id}`,
+        id: job.id,
+        timestamp: job.timestamp,
+        results: job.results,
+        cost: job.costs,
+        rowCount: job.results.length,
+        completed: job.status === 'completed',
+        error: job.error,
+        config: job.config,
+      }));
       setSavedSessions(sessions);
     } catch (e) {
       console.error('[Domain] Failed to load sessions:', e);
@@ -83,21 +103,25 @@ export default function DomainScraper() {
   };
 
   const loadSessionData = (session: any) => {
-    setResults(session.results);
-    setCost(session.cost);
-    setShowHistory(false);
-    alert(`Loaded ${session.rowCount} results from ${new Date(session.timestamp).toLocaleString()}`);
+    if (session.id && session.id.startsWith('domain_')) {
+      router.push(`/domain/${session.id}`);
+    } else {
+      setResults(session.results);
+      setCost(session.cost);
+      setShowHistory(false);
+      alert(`Loaded ${session.rowCount} results from ${new Date(session.timestamp).toLocaleString()}`);
+    }
   };
 
   const deleteSession = (key: string) => {
-    localStorage.removeItem(key);
+    const jobId = key.replace('job_', '');
+    deleteJob('domain', jobId);
     loadSessions();
   };
 
   const clearAllSessions = () => {
     if (confirm('Clear all Domain Scraper sessions? This cannot be undone.')) {
-      const keys = Object.keys(localStorage).filter(k => k.startsWith('domain_session_'));
-      keys.forEach(k => localStorage.removeItem(k));
+      clearAllJobs('domain');
       loadSessions();
     }
   };
@@ -204,6 +228,15 @@ export default function DomainScraper() {
     const allResults: SerpApiResult[] = [];
 
     try {
+      // Create job and navigate to job URL
+      const job = createJob('domain', {
+        domains: domains.join(', '),
+        productCount: productNames.length,
+      }, productNames.length);
+      
+      setCurrentJobId(job.id);
+      router.push(`/domain/${job.id}`);
+      
       // Process in batches for cancellation support and progress saving
       const BATCH_SIZE = 10;
       const totalBatches = Math.ceil(productNames.length / BATCH_SIZE);
@@ -212,8 +245,15 @@ export default function DomainScraper() {
         // Check for cancel request
         if (cancelRequested) {
           console.log('[Domain] Cancel requested');
-          saveSession(allResults, { serpApiCalls: allResults.length }, false, 'Cancelled by user');
-          alert(`Scraping cancelled. ${allResults.length} items were processed and saved to History.`);
+          const cancelCost = { serpApiCalls: allResults.length };
+          saveSession(allResults, cancelCost, false, 'Cancelled by user');
+          
+          // Mark job as cancelled
+          if (currentJobId) {
+            cancelJob(currentJobId, allResults, cancelCost);
+          }
+          
+          alert(`Scraping cancelled. ${allResults.length} items were processed and saved.`);
           setResults(allResults);
           setProcessing(false);
           return;
@@ -223,11 +263,17 @@ export default function DomainScraper() {
         const batchEnd = Math.min(batchStart + BATCH_SIZE, productNames.length);
         const batchNames = productNames.slice(batchStart, batchEnd);
 
-        setProgress({
+        const currentProgress = {
           current: batchStart,
           total: productNames.length,
           phase: `Scraping batch ${batchIdx + 1}/${totalBatches}...`
-        });
+        };
+        setProgress(currentProgress);
+        
+        // Update job progress
+        if (currentJobId) {
+          updateJobProgress(currentJobId, currentProgress, allResults);
+        }
 
         const response = await fetch('/api/scrape-batch', {
           method: 'POST',
@@ -260,12 +306,18 @@ export default function DomainScraper() {
         saveSession(allResults, { serpApiCalls: allResults.length }, false);
       }
 
+      const finalCost = { serpApiCalls: allResults.length };
       setResults(allResults);
-      setCost({ serpApiCalls: allResults.length });
+      setCost(finalCost);
       setProgress({ current: productNames.length, total: productNames.length, phase: 'Complete' });
       
       // Save final completed session
-      saveSession(allResults, { serpApiCalls: allResults.length }, true);
+      saveSession(allResults, finalCost, true);
+      
+      // Mark job as completed
+      if (currentJobId) {
+        completeJob(currentJobId, allResults, finalCost);
+      }
       
       setProcessing(false);
       setCurrentPage(1);
@@ -273,9 +325,16 @@ export default function DomainScraper() {
     } catch (error: any) {
       // Save partial results on error
       if (allResults.length > 0) {
-        saveSession(allResults, { serpApiCalls: allResults.length }, false, error.message);
+        const errorCost = { serpApiCalls: allResults.length };
+        saveSession(allResults, errorCost, false, error.message);
+        
+        // Mark job as errored
+        if (currentJobId) {
+          errorJob(currentJobId, error.message, allResults, errorCost);
+        }
+        
         setResults(allResults);
-        alert(`Error occurred but ${allResults.length} items were saved!\n\nError: ${error.message}\n\nPartial results are shown below and saved in History.`);
+        alert(`Error occurred but ${allResults.length} items were saved!\n\nError: ${error.message}\n\nPartial results are shown below and saved.`);
       } else {
         alert('Error: ' + (error.message || 'Scraping failed'));
       }
