@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import Papa from 'papaparse';
 import Link from 'next/link';
-import { FaUpload, FaPlay, FaTimes, FaCheck, FaDownload, FaSpinner } from 'react-icons/fa';
+import { FaUpload, FaPlay, FaTimes, FaCheck, FaDownload, FaSpinner, FaHistory, FaStopCircle } from 'react-icons/fa';
+import SessionHistory from '@/components/SessionHistory';
 
 interface SerpApiResult {
   productName: string;
@@ -40,6 +41,70 @@ export default function DomainScraper() {
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [showOnlyWithImages, setShowOnlyWithImages] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // History and Cancel
+  const [savedSessions, setSavedSessions] = useState<any[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const [cancelRequested, setCancelRequested] = useState(false);
+
+  // Session management
+  const saveSession = (results: SerpApiResult[], cost: CostTracker, completed: boolean, error?: string) => {
+    try {
+      const session = {
+        timestamp: new Date().toISOString(),
+        results,
+        cost,
+        rowCount: results.length,
+        completed,
+        error,
+        config: { domains, itemsPerPage },
+      };
+      const key = `domain_session_${Date.now()}`;
+      localStorage.setItem(key, JSON.stringify(session));
+      loadSessions();
+    } catch (e) {
+      console.error('[Domain] Failed to save session:', e);
+    }
+  };
+
+  const loadSessions = () => {
+    try {
+      const keys = Object.keys(localStorage).filter(k => k.startsWith('domain_session_'));
+      const sessions = keys.map(key => {
+        const data = localStorage.getItem(key);
+        return data ? { ...JSON.parse(data), key } : null;
+      }).filter(Boolean).sort((a, b) => 
+        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      );
+      setSavedSessions(sessions);
+    } catch (e) {
+      console.error('[Domain] Failed to load sessions:', e);
+    }
+  };
+
+  const loadSessionData = (session: any) => {
+    setResults(session.results);
+    setCost(session.cost);
+    setShowHistory(false);
+    alert(`Loaded ${session.rowCount} results from ${new Date(session.timestamp).toLocaleString()}`);
+  };
+
+  const deleteSession = (key: string) => {
+    localStorage.removeItem(key);
+    loadSessions();
+  };
+
+  const clearAllSessions = () => {
+    if (confirm('Clear all Domain Scraper sessions? This cannot be undone.')) {
+      const keys = Object.keys(localStorage).filter(k => k.startsWith('domain_session_'));
+      keys.forEach(k => localStorage.removeItem(k));
+      loadSessions();
+    }
+  };
+
+  useEffect(() => {
+    loadSessions();
+  }, []);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -132,46 +197,88 @@ export default function DomainScraper() {
     }
 
     setProcessing(true);
+    setCancelRequested(false);
     setProgress({ current: 0, total: productNames.length, phase: 'Scraping images...' });
     setResults([]);
 
-    try {
-      // Call API with streaming response
-      const response = await fetch('/api/scrape-batch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          productNames,
-          domains: domains // Already normalized
-        })
-      });
+    const allResults: SerpApiResult[] = [];
 
-      if (!response.ok) {
-        throw new Error('Failed to start scraping');
+    try {
+      // Process in batches for cancellation support and progress saving
+      const BATCH_SIZE = 10;
+      const totalBatches = Math.ceil(productNames.length / BATCH_SIZE);
+
+      for (let batchIdx = 0; batchIdx < totalBatches; batchIdx++) {
+        // Check for cancel request
+        if (cancelRequested) {
+          console.log('[Domain] Cancel requested');
+          saveSession(allResults, { serpApiCalls: allResults.length }, false, 'Cancelled by user');
+          alert(`Scraping cancelled. ${allResults.length} items were processed and saved to History.`);
+          setResults(allResults);
+          setProcessing(false);
+          return;
+        }
+
+        const batchStart = batchIdx * BATCH_SIZE;
+        const batchEnd = Math.min(batchStart + BATCH_SIZE, productNames.length);
+        const batchNames = productNames.slice(batchStart, batchEnd);
+
+        setProgress({
+          current: batchStart,
+          total: productNames.length,
+          phase: `Scraping batch ${batchIdx + 1}/${totalBatches}...`
+        });
+
+        const response = await fetch('/api/scrape-batch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            productNames: batchNames,
+            domains: domains
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to scrape batch');
+        }
+
+        const data = await response.json();
+
+        // Transform batch results
+        const batchResults: SerpApiResult[] = batchNames.map(name => {
+          const images = data.results[name] || [];
+          return {
+            productName: name,
+            images,
+            selectedImage: images.length > 0 ? 0 : undefined
+          };
+        });
+
+        allResults.push(...batchResults);
+
+        // Save progress after each batch
+        saveSession(allResults, { serpApiCalls: allResults.length }, false);
       }
 
-      const data = await response.json();
-      
-      // Transform results into review format
-      const reviewResults: SerpApiResult[] = productNames.map(name => {
-        const images = data.results[name] || [];
-        return {
-          productName: name,
-          images,
-          selectedImage: images.length > 0 ? 0 : undefined // Auto-select first image if available
-        };
-      });
-
-      setResults(reviewResults);
-      setCost({
-        serpApiCalls: data.totalSearches
-      });
+      setResults(allResults);
+      setCost({ serpApiCalls: allResults.length });
       setProgress({ current: productNames.length, total: productNames.length, phase: 'Complete' });
+      
+      // Save final completed session
+      saveSession(allResults, { serpApiCalls: allResults.length }, true);
+      
       setProcessing(false);
-      setCurrentPage(1); // Reset to first page when new results arrive
+      setCurrentPage(1);
 
     } catch (error: any) {
-      alert('Error: ' + (error.message || 'Scraping failed'));
+      // Save partial results on error
+      if (allResults.length > 0) {
+        saveSession(allResults, { serpApiCalls: allResults.length }, false, error.message);
+        setResults(allResults);
+        alert(`Error occurred but ${allResults.length} items were saved!\n\nError: ${error.message}\n\nPartial results are shown below and saved in History.`);
+      } else {
+        alert('Error: ' + (error.message || 'Scraping failed'));
+      }
       setProcessing(false);
     }
   };
@@ -224,13 +331,41 @@ export default function DomainScraper() {
           <Link href="/" className="text-blue-600 hover:text-blue-700 mb-2 inline-block text-sm">
             ← Back to Home
           </Link>
-          <h1 className="text-3xl font-bold text-gray-800 flex items-center gap-3">
-            <span className="text-2xl">🌐</span>
-            Domain Web Scraper
-          </h1>
-          <p className="text-gray-600 mt-1">
-            Find top 3 product images from specific domains using Google Images (SerpAPI, threshold: 0.3)
-          </p>
+          <div className="flex justify-between items-start">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-800 flex items-center gap-3">
+                <span className="text-2xl">🌐</span>
+                Domain Web Scraper
+              </h1>
+              <p className="text-gray-600 mt-1">
+                Find top 3 product images from specific domains using Google Images (SerpAPI, threshold: 0.3)
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowHistory(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-lg transition-colors relative"
+                disabled={processing}
+              >
+                <FaHistory />
+                <span className="text-sm font-medium">History</span>
+                {savedSessions.length > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                    {savedSessions.length}
+                  </span>
+                )}
+              </button>
+              {processing && (
+                <button
+                  onClick={() => setCancelRequested(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg transition-colors"
+                >
+                  <FaStopCircle />
+                  <span className="text-sm font-medium">Cancel</span>
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       </header>
 
@@ -594,6 +729,18 @@ export default function DomainScraper() {
             </div>
           );
         })()}
+
+        {/* History Modal */}
+        {showHistory && (
+          <SessionHistory
+            sessions={savedSessions}
+            onLoad={loadSessionData}
+            onDelete={deleteSession}
+            onClearAll={clearAllSessions}
+            onClose={() => setShowHistory(false)}
+            toolName="Domain Scraper"
+          />
+        )}
       </main>
 
       <footer className="mt-20 py-8 border-t border-gray-200 bg-white/50">

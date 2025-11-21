@@ -47,6 +47,66 @@ export default function URPCMatcher() {
   const [showHistory, setShowHistory] = useState(false);
   const [cancelRequested, setCancelRequested] = useState(false);
 
+  // Session management functions
+  const saveSession = (results: MatchResult[], costs: any, completed: boolean, error?: string) => {
+    try {
+      const session = {
+        timestamp: new Date().toISOString(),
+        results,
+        costs,
+        rowCount: results.length,
+        completed,
+        error,
+        config: { productType, reviewMode },
+      };
+      const key = `urpc_session_${Date.now()}`;
+      localStorage.setItem(key, JSON.stringify(session));
+      loadSessions();
+    } catch (e) {
+      console.error('[URPC] Failed to save session:', e);
+    }
+  };
+
+  const loadSessions = () => {
+    try {
+      const keys = Object.keys(localStorage).filter(k => k.startsWith('urpc_session_'));
+      const sessions = keys.map(key => {
+        const data = localStorage.getItem(key);
+        return data ? { ...JSON.parse(data), key } : null;
+      }).filter(Boolean).sort((a, b) => 
+        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      );
+      setSavedSessions(sessions);
+    } catch (e) {
+      console.error('[URPC] Failed to load sessions:', e);
+    }
+  };
+
+  const loadSessionData = (session: any) => {
+    setFinalResults(session.results);
+    setApiStats(session.costs || { embeddingCalls: 0, gptCalls: 0 });
+    setShowHistory(false);
+    alert(`Loaded ${session.rowCount} results from ${new Date(session.timestamp).toLocaleString()}`);
+  };
+
+  const deleteSession = (key: string) => {
+    localStorage.removeItem(key);
+    loadSessions();
+  };
+
+  const clearAllSessions = () => {
+    if (confirm('Clear all URPC sessions? This cannot be undone.')) {
+      const keys = Object.keys(localStorage).filter(k => k.startsWith('urpc_session_'));
+      keys.forEach(k => localStorage.removeItem(k));
+      loadSessions();
+    }
+  };
+
+  // Load sessions on mount
+  useEffect(() => {
+    loadSessions();
+  }, []);
+
   // Debug logging for state changes
   useEffect(() => {
     console.log('[STATE] showReview changed to:', showReview);
@@ -112,6 +172,7 @@ export default function URPCMatcher() {
     }
     
     setProcessing(true);
+    setCancelRequested(false);
     setProgress({ current: 0, total: rowLimit, phase: 'Initializing...' });
     setAllResults([]);
     setReviewQueue([]);
@@ -119,6 +180,8 @@ export default function URPCMatcher() {
     setAutoAcceptedCount(0);
     setShowReview(false);
     setFinalResults([]);
+    
+    const allBatchResults: MatchResult[] = [];
     
     try {
       const products = csvData
@@ -130,9 +193,18 @@ export default function URPCMatcher() {
       
       // Process in smaller batches for progress updates
       const BATCH_SIZE = 10;
-      const allBatchResults: MatchResult[] = [];
       
       for (let i = 0; i < products.length; i += BATCH_SIZE) {
+        // Check for cancel request
+        if (cancelRequested) {
+          console.log('[URPC] Cancel requested, stopping...');
+          saveSession(allBatchResults, apiStats, false, 'Cancelled by user');
+          alert(`Processing cancelled. ${allBatchResults.length} items were processed and saved to History.`);
+          setFinalResults(allBatchResults);
+          setProcessing(false);
+          return;
+        }
+
         const batch = products.slice(i, i + BATCH_SIZE);
         setProgress({ 
           current: i, 
@@ -160,6 +232,13 @@ export default function URPCMatcher() {
         
         if (data.success) {
           allBatchResults.push(...data.results);
+          
+          // Save progress after each batch
+          const batchApiStats = {
+            embeddingCalls: allBatchResults.length * 51,
+            gptCalls: allBatchResults.filter(r => r.matchedName).length,
+          };
+          saveSession(allBatchResults, batchApiStats, false);
         } else {
           throw new Error(data.error || 'Processing failed');
         }
@@ -223,7 +302,9 @@ export default function URPCMatcher() {
           // No items to review - show all results
           console.log('ℹ️ No items need review - showing final results');
           console.log('All items were either auto-accepted (≥9) or auto-rejected (<5)');
-          setFinalResults([...initialAccepted, ...initialRejected]);
+          const finalResults = [...initialAccepted, ...initialRejected];
+          setFinalResults(finalResults);
+          saveSession(finalResults, apiStats, true);
           setProcessing(false);
         }
       } else if (reviewMode === 'aionly') {
@@ -243,12 +324,27 @@ export default function URPCMatcher() {
           }));
         
         // Show ALL results (approved with data + rejected without data)
-        setFinalResults([...approved, ...rejected]);
+        const allResults = [...approved, ...rejected];
+        setFinalResults(allResults);
+        
+        // Save final session
+        saveSession(allResults, apiStats, true);
         setProcessing(false);
       }
       
     } catch (error: any) {
-      alert('Error: ' + (error.message || 'Processing failed'));
+      // Save partial results on error
+      if (allBatchResults.length > 0) {
+        const batchApiStats = {
+          embeddingCalls: allBatchResults.length * 51,
+          gptCalls: allBatchResults.filter(r => r.matchedName).length,
+        };
+        saveSession(allBatchResults, batchApiStats, false, error.message);
+        setFinalResults(allBatchResults);
+        alert(`Error occurred but ${allBatchResults.length} items were saved!\n\nError: ${error.message}\n\nPartial results are shown below and saved in History.`);
+      } else {
+        alert('Error: ' + (error.message || 'Processing failed'));
+      }
       setProcessing(false);
     }
   };
@@ -262,6 +358,7 @@ export default function URPCMatcher() {
     if (currentReviewIndex + 1 >= reviewQueue.length) {
       // Review complete - show ALL results
       setFinalResults(newReviewedResults);
+      saveSession(newReviewedResults, apiStats, true);
       setShowReview(false);
     } else {
       setCurrentReviewIndex(currentReviewIndex + 1);
@@ -285,6 +382,7 @@ export default function URPCMatcher() {
     if (currentReviewIndex + 1 >= reviewQueue.length) {
       // Review complete - show ALL results (including rejected)
       setFinalResults(newReviewedResults);
+      saveSession(newReviewedResults, apiStats, true);
       setShowReview(false);
     } else {
       setCurrentReviewIndex(currentReviewIndex + 1);
@@ -310,13 +408,41 @@ export default function URPCMatcher() {
             <ArrowLeft className="w-4 h-4" />
             Back to Home
           </Link>
-          <h1 className="text-4xl font-bold text-gray-800 flex items-center gap-3">
-            <span className="text-3xl">🛒</span>
-            URPC Image Scraper
-          </h1>
-          <p className="text-gray-600 mt-2">
-            Match products against 244K+ Alcohol & CnG database with AI verification
-          </p>
+          <div className="flex justify-between items-start">
+            <div>
+              <h1 className="text-4xl font-bold text-gray-800 flex items-center gap-3">
+                <span className="text-3xl">🛒</span>
+                URPC Image Scraper
+              </h1>
+              <p className="text-gray-600 mt-2">
+                Match products against 244K+ Alcohol & CnG database with AI verification
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowHistory(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-lg transition-colors relative"
+                disabled={processing}
+              >
+                <History className="w-4 h-4" />
+                <span className="text-sm font-medium">History</span>
+                {savedSessions.length > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                    {savedSessions.length}
+                  </span>
+                )}
+              </button>
+              {processing && (
+                <button
+                  onClick={() => setCancelRequested(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg transition-colors"
+                >
+                  <StopCircle className="w-4 h-4" />
+                  <span className="text-sm font-medium">Cancel</span>
+                </button>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Interactive Review Mode */}
@@ -661,6 +787,18 @@ export default function URPCMatcher() {
               />
             </div>
           </div>
+        )}
+
+        {/* History Modal */}
+        {showHistory && (
+          <SessionHistory
+            sessions={savedSessions}
+            onLoad={loadSessionData}
+            onDelete={deleteSession}
+            onClearAll={clearAllSessions}
+            onClose={() => setShowHistory(false)}
+            toolName="URPC Matcher"
+          />
         )}
       </div>
     </div>
