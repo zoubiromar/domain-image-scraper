@@ -1,12 +1,16 @@
 /**
  * Job Manager - Handles job creation, updates, and persistence
  * 
- * Jobs are stored in browser localStorage and enable:
+ * Jobs are stored in Vercel Blob (server-side) with localStorage fallback.
+ * This enables:
  * - URL-based job access (/urpc/{jobId})
  * - Resume interrupted processing
  * - Progress persistence
- * - Shareable links (within same browser)
+ * - Truly shareable links (across devices!)
+ * - No storage quota issues
  */
+
+import { saveJobToBlob, loadJobFromBlob, deleteJobFromBlob, cacheJobId } from './job-storage';
 
 // ============================================================================
 // TYPES
@@ -70,101 +74,172 @@ export function createJob(
     lastUpdated: new Date().toISOString(),
   };
 
+  // Save to Blob (async, don't wait)
+  saveJobToBlob(tool, job).catch(err => {
+    console.warn('[JobManager] Blob save failed, using localStorage fallback');
+  });
+  
+  // Cache job ID for listing (lightweight)
+  cacheJobId(tool, jobId);
+  
+  // Also save to localStorage as fallback (but handle quota errors)
   try {
     localStorage.setItem(`${tool}_job_${jobId}`, JSON.stringify(job));
     console.log(`[JobManager] Created job: ${jobId}`);
   } catch (e) {
-    console.error('[JobManager] Failed to create job:', e);
+    if (e instanceof DOMException && e.name === 'QuotaExceededError') {
+      console.warn('[JobManager] localStorage full, saved to Blob only');
+    } else {
+      console.error('[JobManager] Failed to create job:', e);
+    }
   }
 
   return job;
 }
 
 /**
- * Get job by ID
+ * Get job by ID (checks localStorage first for speed, then Blob)
  */
-export function getJob(tool: string, jobId: string): Job | null {
+export async function getJob(tool: string, jobId: string): Promise<Job | null> {
+  // Try localStorage first (faster)
   try {
     const data = localStorage.getItem(`${tool}_job_${jobId}`);
-    return data ? JSON.parse(data) : null;
+    if (data) {
+      return JSON.parse(data);
+    }
   } catch (e) {
-    console.error('[JobManager] Failed to get job:', e);
+    console.warn('[JobManager] localStorage read failed, trying Blob');
+  }
+
+  // Fall back to Blob storage
+  try {
+    const job = await loadJobFromBlob(tool, jobId);
+    
+    // Cache in localStorage for future access (if space available)
+    if (job) {
+      try {
+        localStorage.setItem(`${tool}_job_${jobId}`, JSON.stringify(job));
+      } catch (e) {
+        // Quota exceeded, no problem - Blob is source of truth
+      }
+    }
+    
+    return job;
+  } catch (e) {
+    console.error('[JobManager] Failed to get job from Blob:', e);
     return null;
   }
 }
 
 /**
- * Update job progress
+ * Synchronous version that only checks localStorage
+ * Use this for immediate checks, then upgrade to async version
+ */
+export function getJobSync(tool: string, jobId: string): Job | null {
+  try {
+    const data = localStorage.getItem(`${tool}_job_${jobId}`);
+    return data ? JSON.parse(data) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
+ * Update job progress (saves to both Blob and localStorage)
  */
 export function updateJobProgress(
   jobId: string,
   progress: { current: number; total: number; phase: string },
   partialResults: any[]
 ): void {
-  try {
-    // First try to get from any tool prefix
-    let job: Job | null = null;
-    let toolPrefix = '';
-    
-    for (const tool of ['urpc', 'domain', 'qa']) {
-      const key = `${tool}_job_${jobId}`;
-      const data = localStorage.getItem(key);
-      if (data) {
+  // Find the job's tool prefix
+  let job: Job | null = null;
+  let toolPrefix = '';
+  
+  for (const tool of ['urpc', 'domain', 'qa']) {
+    const key = `${tool}_job_${jobId}`;
+    const data = localStorage.getItem(key);
+    if (data) {
+      try {
         job = JSON.parse(data);
         toolPrefix = tool;
         break;
+      } catch (e) {
+        // Skip invalid JSON
       }
     }
+  }
 
-    if (!job) {
-      console.warn('[JobManager] Job not found for progress update:', jobId);
-      return;
-    }
+  if (!job) {
+    console.warn('[JobManager] Job not found for progress update:', jobId);
+    return;
+  }
 
-    job.progress = progress;
-    job.results = partialResults;
-    job.lastUpdated = new Date().toISOString();
+  // Update job data
+  job.progress = progress;
+  job.results = partialResults;
+  job.lastUpdated = new Date().toISOString();
 
+  // Save to Blob (async, don't wait - updates happen frequently)
+  saveJobToBlob(toolPrefix, job).catch(() => {
+    console.warn('[JobManager] Blob update failed (non-critical)');
+  });
+
+  // Update localStorage (for immediate access)
+  try {
     localStorage.setItem(`${toolPrefix}_job_${jobId}`, JSON.stringify(job));
   } catch (e) {
-    console.error('[JobManager] Failed to update job progress:', e);
+    if (e instanceof DOMException && e.name === 'QuotaExceededError') {
+      // Quota exceeded, but Blob has it - not critical
+      console.warn('[JobManager] localStorage full (Blob has the data)');
+    }
   }
 }
 
 /**
- * Mark job as completed
+ * Mark job as completed (saves to Blob and localStorage)
  */
 export function completeJob(jobId: string, results: any[], costs: any): void {
-  try {
-    let job: Job | null = null;
-    let toolPrefix = '';
-    
-    for (const tool of ['urpc', 'domain', 'qa']) {
-      const key = `${tool}_job_${jobId}`;
-      const data = localStorage.getItem(key);
-      if (data) {
+  let job: Job | null = null;
+  let toolPrefix = '';
+  
+  for (const tool of ['urpc', 'domain', 'qa']) {
+    const key = `${tool}_job_${jobId}`;
+    const data = localStorage.getItem(key);
+    if (data) {
+      try {
         job = JSON.parse(data);
         toolPrefix = tool;
         break;
+      } catch (e) {
+        // Skip invalid JSON
       }
     }
+  }
 
-    if (!job) {
-      console.warn('[JobManager] Job not found for completion:', jobId);
-      return;
-    }
+  if (!job) {
+    console.warn('[JobManager] Job not found for completion:', jobId);
+    return;
+  }
 
-    job.status = 'completed';
-    job.results = results;
-    job.costs = costs;
-    job.lastUpdated = new Date().toISOString();
-    job.progress.current = job.progress.total;
-    job.progress.phase = 'Completed';
+  job.status = 'completed';
+  job.results = results;
+  job.costs = costs;
+  job.lastUpdated = new Date().toISOString();
+  job.progress.current = job.progress.total;
+  job.progress.phase = 'Completed';
 
+  // Save to Blob (permanent storage)
+  saveJobToBlob(toolPrefix, job);
+
+  // Update localStorage
+  try {
     localStorage.setItem(`${toolPrefix}_job_${jobId}`, JSON.stringify(job));
     console.log(`[JobManager] Job completed: ${jobId}`);
   } catch (e) {
-    console.error('[JobManager] Failed to complete job:', e);
+    if (!(e instanceof DOMException && e.name === 'QuotaExceededError')) {
+      console.error('[JobManager] Failed to complete job:', e);
+    }
   }
 }
 
@@ -172,35 +247,43 @@ export function completeJob(jobId: string, results: any[], costs: any): void {
  * Mark job as cancelled
  */
 export function cancelJob(jobId: string, partialResults: any[], costs: any): void {
-  try {
-    let job: Job | null = null;
-    let toolPrefix = '';
-    
-    for (const tool of ['urpc', 'domain', 'qa']) {
-      const key = `${tool}_job_${jobId}`;
-      const data = localStorage.getItem(key);
-      if (data) {
+  let job: Job | null = null;
+  let toolPrefix = '';
+  
+  for (const tool of ['urpc', 'domain', 'qa']) {
+    const key = `${tool}_job_${jobId}`;
+    const data = localStorage.getItem(key);
+    if (data) {
+      try {
         job = JSON.parse(data);
         toolPrefix = tool;
         break;
+      } catch (e) {
+        continue;
       }
     }
+  }
 
-    if (!job) {
-      console.warn('[JobManager] Job not found for cancellation:', jobId);
-      return;
-    }
+  if (!job) {
+    console.warn('[JobManager] Job not found for cancellation:', jobId);
+    return;
+  }
 
-    job.status = 'cancelled';
-    job.results = partialResults;
-    job.costs = costs;
-    job.lastUpdated = new Date().toISOString();
-    job.progress.phase = 'Cancelled';
+  job.status = 'cancelled';
+  job.results = partialResults;
+  job.costs = costs;
+  job.lastUpdated = new Date().toISOString();
+  job.progress.phase = 'Cancelled';
 
+  // Save to Blob
+  saveJobToBlob(toolPrefix, job);
+
+  // Update localStorage
+  try {
     localStorage.setItem(`${toolPrefix}_job_${jobId}`, JSON.stringify(job));
     console.log(`[JobManager] Job cancelled: ${jobId}`);
   } catch (e) {
-    console.error('[JobManager] Failed to cancel job:', e);
+    // Quota exceeded is OK - Blob has it
   }
 }
 
@@ -208,35 +291,43 @@ export function cancelJob(jobId: string, partialResults: any[], costs: any): voi
  * Mark job as errored
  */
 export function errorJob(jobId: string, error: string, partialResults: any[], costs: any): void {
-  try {
-    let job: Job | null = null;
-    let toolPrefix = '';
-    
-    for (const tool of ['urpc', 'domain', 'qa']) {
-      const key = `${tool}_job_${jobId}`;
-      const data = localStorage.getItem(key);
-      if (data) {
+  let job: Job | null = null;
+  let toolPrefix = '';
+  
+  for (const tool of ['urpc', 'domain', 'qa']) {
+    const key = `${tool}_job_${jobId}`;
+    const data = localStorage.getItem(key);
+    if (data) {
+      try {
         job = JSON.parse(data);
         toolPrefix = tool;
         break;
+      } catch (e) {
+        continue;
       }
     }
+  }
 
-    if (!job) {
-      console.warn('[JobManager] Job not found for error:', jobId);
-      return;
-    }
+  if (!job) {
+    console.warn('[JobManager] Job not found for error:', jobId);
+    return;
+  }
 
-    job.status = 'error';
-    job.error = error;
-    job.results = partialResults;
-    job.costs = costs;
-    job.lastUpdated = new Date().toISOString();
+  job.status = 'error';
+  job.error = error;
+  job.results = partialResults;
+  job.costs = costs;
+  job.lastUpdated = new Date().toISOString();
 
+  // Save to Blob
+  saveJobToBlob(toolPrefix, job);
+
+  // Update localStorage
+  try {
     localStorage.setItem(`${toolPrefix}_job_${jobId}`, JSON.stringify(job));
     console.log(`[JobManager] Job errored: ${jobId}`);
   } catch (e) {
-    console.error('[JobManager] Failed to mark job as errored:', e);
+    // Quota exceeded OK
   }
 }
 

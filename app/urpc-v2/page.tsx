@@ -515,8 +515,8 @@ export default function URPCMatcher() {
           <div className="flex justify-between items-start">
             <div>
               <h1 className="text-4xl font-bold text-gray-800 flex items-center gap-3">
-                <span className="text-3xl">≡ƒ¢Æ</span>
-                URPC Image Scraper
+                <span className="text-3xl">🛒</span>
+                URPC Image Scraper V2 (Experimental)
               </h1>
               <p className="text-gray-600 mt-2">
                 Match products against 244K+ Alcohol & CnG database with AI verification
@@ -607,7 +607,7 @@ export default function URPCMatcher() {
               {file && (
                 <div className="mt-4 p-3 bg-blue-50 rounded-lg">
                   <p className="text-sm font-medium text-blue-900">
-                    ≡ƒôä {file.name}
+                    📄 {file.name}
                   </p>
                   <p className="text-xs text-blue-700 mt-1">
                     {csvData.length} rows loaded
@@ -638,7 +638,7 @@ export default function URPCMatcher() {
                           className="w-4 h-4"
                         />
                         <span className="text-base font-medium flex items-center gap-1.5">
-                          <span className="text-xl">≡ƒì║</span> Alcohol
+                          <span className="text-xl">🍺</span> Alcohol
                         </span>
                       </label>
                       <label className="flex items-center gap-2 cursor-pointer">
@@ -650,7 +650,7 @@ export default function URPCMatcher() {
                           className="w-4 h-4"
                         />
                         <span className="text-base font-medium flex items-center gap-1.5">
-                          <span className="text-xl">≡ƒì┐</span> CnG
+                          <span className="text-xl">🍿</span> CnG
                         </span>
                       </label>
                     </div>
@@ -734,7 +734,7 @@ export default function URPCMatcher() {
                         />
                         <div>
                           <div className="font-medium flex items-center gap-1.5">
-                            <span className="text-base">≡ƒæü∩╕Å</span> Interactive Review Mode
+                            <span className="text-base">👁️</span> Interactive Review Mode
                           </div>
                           <div className="text-xs text-gray-600 mt-0.5">
                             Review uncertain matches (score 5-8), auto-accept confident matches (9-10)
@@ -751,7 +751,7 @@ export default function URPCMatcher() {
                         />
                         <div>
                           <div className="font-medium flex items-center gap-1.5">
-                            <span className="text-base">≡ƒñû</span> AI Review Only Mode
+                            <span className="text-base">🤖</span> AI Review Only Mode
                           </div>
                           <div className="text-xs text-gray-600 mt-0.5">
                             Auto-reject uncertain matches (score &lt; 9), no user review needed
@@ -770,7 +770,7 @@ export default function URPCMatcher() {
                 >
                   {processing ? (
                     <span className="flex items-center justify-center gap-2">
-                      <span className="animate-spin">ΓÅ│</span>
+                      <span className="animate-spin">⏳</span>
                       {progress.phase} ({progress.current}/{progress.total})
                     </span>
                   ) : (
@@ -808,7 +808,7 @@ export default function URPCMatcher() {
           <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-semibold flex items-center gap-2">
-                Γ£à Results ({finalResults.length})
+                ✅ Results ({finalResults.length})
               </h2>
               <button
                 onClick={downloadCSV}

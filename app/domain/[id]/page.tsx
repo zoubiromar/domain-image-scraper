@@ -23,31 +23,35 @@ export default function DomainJobPage() {
       return;
     }
 
-    const loadedJob = getJob('domain', jobId);
-    
-    if (!loadedJob) {
-      setNotFound(true);
+    const loadJob = async () => {
+      const loadedJob = await getJob('domain', jobId);
+      
+      if (!loadedJob) {
+        setNotFound(true);
+        setLoading(false);
+        return;
+      }
+
+      setJob(loadedJob);
       setLoading(false);
-      return;
-    }
 
-    setJob(loadedJob);
-    setLoading(false);
-
-    // Poll for updates if processing
-    if (loadedJob.status === 'processing') {
-      const interval = setInterval(() => {
-        const updatedJob = getJob('domain', jobId);
-        if (updatedJob) {
-          setJob(updatedJob);
-          if (updatedJob.status !== 'processing') {
-            clearInterval(interval);
+      // Poll for updates if processing
+      if (loadedJob.status === 'processing') {
+        const interval = setInterval(async () => {
+          const updatedJob = await getJob('domain', jobId);
+          if (updatedJob) {
+            setJob(updatedJob);
+            if (updatedJob.status !== 'processing') {
+              clearInterval(interval);
+            }
           }
-        }
-      }, 1000);
+        }, 1000);
 
-      return () => clearInterval(interval);
-    }
+        return () => clearInterval(interval);
+      }
+    };
+
+    loadJob();
   }, [jobId]);
 
   const handleDownloadCSV = () => {

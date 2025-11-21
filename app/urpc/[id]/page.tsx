@@ -23,34 +23,38 @@ export default function URPCJobPage() {
       return;
     }
 
-    // Load job from localStorage
-    const loadedJob = getJob('urpc', jobId);
-    
-    if (!loadedJob) {
-      setNotFound(true);
+    // Load job from Blob/localStorage
+    const loadJob = async () => {
+      const loadedJob = await getJob('urpc', jobId);
+      
+      if (!loadedJob) {
+        setNotFound(true);
+        setLoading(false);
+        return;
+      }
+
+      setJob(loadedJob);
       setLoading(false);
-      return;
-    }
 
-    setJob(loadedJob);
-    setLoading(false);
-
-    // If job is in progress, poll for updates
-    if (loadedJob.status === 'processing') {
-      const interval = setInterval(() => {
-        const updatedJob = getJob('urpc', jobId);
-        if (updatedJob) {
-          setJob(updatedJob);
-          
-          // Stop polling if job is no longer processing
-          if (updatedJob.status !== 'processing') {
-            clearInterval(interval);
+      // If job is in progress, poll for updates
+      if (loadedJob.status === 'processing') {
+        const interval = setInterval(async () => {
+          const updatedJob = await getJob('urpc', jobId);
+          if (updatedJob) {
+            setJob(updatedJob);
+            
+            // Stop polling if job is no longer processing
+            if (updatedJob.status !== 'processing') {
+              clearInterval(interval);
+            }
           }
-        }
-      }, 1000); // Check every second
+        }, 1000); // Check every second
 
-      return () => clearInterval(interval);
-    }
+        return () => clearInterval(interval);
+      }
+    };
+
+    loadJob();
   }, [jobId]);
 
   const handleDownloadCSV = () => {
