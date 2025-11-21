@@ -1,12 +1,24 @@
-'use client';
+﻿'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Upload, FileSpreadsheet, Settings, Download, ArrowLeft, History, StopCircle } from 'lucide-react';
 import Papa from 'papaparse';
 import Link from 'next/link';
 import ReviewCard from '@/components/ReviewCard';
 import CostTracker from '@/components/CostTracker';
 import SessionHistory from '@/components/SessionHistory';
+import {
+  createJob,
+  updateJobProgress,
+  completeJob,
+  cancelJob,
+  errorJob,
+  getJob,
+  getAllJobs,
+  deleteJob,
+  deleteAllJobs,
+} from '@/lib/job-manager';
 
 // Ensure this page is dynamically rendered
 export const dynamic = 'force-dynamic';
@@ -22,8 +34,11 @@ interface MatchResult {
 }
 
 export default function URPCMatcher() {
+  const router = useRouter();
+  
   const [file, setFile] = useState<File | null>(null);
   const [csvData, setCsvData] = useState<any[]>([]);
+  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   const [columns, setColumns] = useState<string[]>([]);
   const [selectedColumn, setSelectedColumn] = useState('');
   const [productType, setProductType] = useState<'alcohol' | 'cng'>('alcohol');
@@ -49,33 +64,27 @@ export default function URPCMatcher() {
 
   // Session management functions
   const saveSession = (results: MatchResult[], costs: any, completed: boolean, error?: string) => {
-    try {
-      const session = {
-        timestamp: new Date().toISOString(),
-        results,
-        costs,
-        rowCount: results.length,
-        completed,
-        error,
-        config: { productType, reviewMode },
-      };
-      const key = `urpc_session_${Date.now()}`;
-      localStorage.setItem(key, JSON.stringify(session));
-      loadSessions();
-    } catch (e) {
-      console.error('[URPC] Failed to save session:', e);
-    }
+    // Job system handles saving, no need for separate sessions
+    // This prevents duplicate storage and QuotaExceededError
+    console.log('[URPC-V2] Skipping session save (job system handles it)');
   };
 
   const loadSessions = () => {
     try {
-      const keys = Object.keys(localStorage).filter(k => k.startsWith('urpc_session_'));
-      const sessions = keys.map(key => {
-        const data = localStorage.getItem(key);
-        return data ? { ...JSON.parse(data), key } : null;
-      }).filter(Boolean).sort((a, b) => 
-        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-      );
+      // Load jobs from new job system
+      const jobs = getAllJobs('urpc');
+      // Convert jobs to session format for compatibility
+      const sessions = jobs.map(job => ({
+        key: `job_${job.id}`,
+        id: job.id,
+        timestamp: job.timestamp,
+        results: job.results,
+        costs: job.costs,
+        rowCount: job.results.length,
+        completed: job.status === 'completed',
+        error: job.error,
+        config: job.config,
+      }));
       setSavedSessions(sessions);
     } catch (e) {
       console.error('[URPC] Failed to load sessions:', e);
@@ -83,27 +92,43 @@ export default function URPCMatcher() {
   };
 
   const loadSessionData = (session: any) => {
-    setFinalResults(session.results);
-    setApiStats(session.costs || { embeddingCalls: 0, gptCalls: 0 });
-    setShowHistory(false);
-    alert(`Loaded ${session.rowCount} results from ${new Date(session.timestamp).toLocaleString()}`);
+    // Check if this is a job (has ID that matches job pattern)
+    if (session.id && session.id.startsWith('urpc_')) {
+      // Navigate to job URL
+      router.push(`/urpc/${session.id}`);
+    } else {
+      // Old session format - load directly
+      setFinalResults(session.results);
+      setApiStats(session.costs || { embeddingCalls: 0, gptCalls: 0 });
+      setShowHistory(false);
+      alert(`Loaded ${session.rowCount} results from ${new Date(session.timestamp).toLocaleString()}`);
+    }
   };
 
   const deleteSession = (key: string) => {
-    localStorage.removeItem(key);
+    // Extract job ID from key (format: job_urpc_timestamp_random)
+    const jobId = key.replace('job_', '');
+    deleteJob('urpc', jobId);
     loadSessions();
   };
 
   const clearAllSessions = () => {
     if (confirm('Clear all URPC sessions? This cannot be undone.')) {
-      const keys = Object.keys(localStorage).filter(k => k.startsWith('urpc_session_'));
-      keys.forEach(k => localStorage.removeItem(k));
+      deleteAllJobs('urpc');
       loadSessions();
     }
   };
 
-  // Load sessions on mount
+  // Clean up old jobs and load sessions on mount
   useEffect(() => {
+    // Auto-cleanup: Keep only last 5 jobs to prevent localStorage quota issues
+    const jobs = getAllJobs('urpc');
+    if (jobs.length > 5) {
+      const oldJobs = jobs.slice(5); // Jobs beyond the 5 most recent
+      oldJobs.forEach(job => deleteJob('urpc', job.id));
+      console.log(`[URPC-V2] Cleaned up ${oldJobs.length} old jobs`);
+    }
+    
     loadSessions();
   }, []);
 
@@ -114,7 +139,7 @@ export default function URPCMatcher() {
     console.log('[STATE] currentReviewIndex:', currentReviewIndex);
     
     if (showReview && reviewQueue.length > 0) {
-      console.log('✅ Review mode is ACTIVE');
+      console.log('Γ£à Review mode is ACTIVE');
       console.log('Current item to review:', reviewQueue[currentReviewIndex]);
     }
   }, [showReview, reviewQueue, currentReviewIndex]);
@@ -184,39 +209,71 @@ export default function URPCMatcher() {
     const allBatchResults: MatchResult[] = [];
     
     try {
+      // Extract products with original index to maintain order
       const products = csvData
         .slice(startRow - 1, startRow - 1 + rowLimit)
-        .map(row => row[selectedColumn])
-        .filter(name => name && name.trim());
+        .map((row, idx) => ({
+          name: row[selectedColumn],
+          originalIndex: idx,
+        }))
+        .filter(p => p.name && p.name.trim());
+      
+      // Create job and navigate to job URL
+      const job = createJob('urpc', {
+        productType,
+        reviewMode,
+        productCount: products.length,
+      }, products.length);
+      
+      setCurrentJobId(job.id);
+      router.push(`/urpc/${job.id}`);
       
       setProgress({ current: 0, total: products.length, phase: 'Processing products...' });
       
-      // Process in smaller batches for progress updates
-      const BATCH_SIZE = 10;
-      
-      for (let i = 0; i < products.length; i += BATCH_SIZE) {
-        // Check for cancel request
+      // Process ONE product at a time for immediate cancellation
+      // This allows cancel to work within 1-2 seconds instead of waiting for full batch
+      for (let i = 0; i < products.length; i++) {
+        // Check for cancel request BEFORE each product
         if (cancelRequested) {
-          console.log('[URPC] Cancel requested, stopping...');
-          saveSession(allBatchResults, apiStats, false, 'Cancelled by user');
-          alert(`Processing cancelled. ${allBatchResults.length} items were processed and saved to History.`);
+          console.log('[URPC] Cancel requested, stopping immediately...');
+          const cancelApiStats = {
+            embeddingCalls: allBatchResults.length * 51,
+            gptCalls: allBatchResults.filter(r => r.matchedName).length,
+          };
+          
+          // Sort results by original index before saving
+          allBatchResults.sort((a: any, b: any) => a.originalIndex - b.originalIndex);
+          
+          saveSession(allBatchResults, cancelApiStats, false, 'Cancelled by user');
+          
+          // Mark job as cancelled
+          if (currentJobId) {
+            cancelJob(currentJobId, allBatchResults, cancelApiStats);
+          }
+          
           setFinalResults(allBatchResults);
           setProcessing(false);
+          alert(`Processing cancelled. ${allBatchResults.length} of ${products.length} items were processed and saved.`);
           return;
         }
 
-        const batch = products.slice(i, i + BATCH_SIZE);
-        setProgress({ 
-          current: i, 
-          total: products.length, 
-          phase: `Processing batch ${Math.floor(i / BATCH_SIZE) + 1}...` 
-        });
+        const currentProgress = {
+          current: i,
+          total: products.length,
+          phase: `Processing item ${i + 1}/${products.length}...`
+        };
+        setProgress(currentProgress);
+        
+        // Update job progress in localStorage
+        if (currentJobId) {
+          updateJobProgress(currentJobId, currentProgress, allBatchResults);
+        }
         
         const response = await fetch('/api/match', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            products: batch,
+            products: [products[i].name], // Single product for immediate cancel
             productType,
             apiKey,
           }),
@@ -225,25 +282,35 @@ export default function URPCMatcher() {
         const data = await response.json();
         
         if (data.databaseMissing) {
-          alert('⚠️ Database Not Available\n\nThe URPC database is not set up. Please use locally or contact admin.');
+          alert('ΓÜá∩╕Å Database Not Available\n\nThe URPC database is not set up. Please use locally or contact admin.');
           setProcessing(false);
           return;
         }
         
         if (data.success) {
-          allBatchResults.push(...data.results);
+          // Add original index to each result to preserve order
+          const resultsWithIndex = data.results.map((r: MatchResult) => ({
+            ...r,
+            originalIndex: products[i].originalIndex,
+          }));
+          allBatchResults.push(...resultsWithIndex);
           
-          // Save progress after each batch
-          const batchApiStats = {
-            embeddingCalls: allBatchResults.length * 51,
-            gptCalls: allBatchResults.filter(r => r.matchedName).length,
-          };
-          saveSession(allBatchResults, batchApiStats, false);
+          // Save progress every 10 products (not after every single one to avoid overhead)
+          if ((i + 1) % 10 === 0 || i === products.length - 1) {
+            const batchApiStats = {
+              embeddingCalls: allBatchResults.length * 51,
+              gptCalls: allBatchResults.filter(r => r.matchedName).length,
+            };
+            saveSession(allBatchResults, batchApiStats, false);
+          }
         } else {
           throw new Error(data.error || 'Processing failed');
         }
       }
       
+      // Sort results by original index to preserve input order
+      allBatchResults.sort((a: any, b: any) => a.originalIndex - b.originalIndex);
+
       setProgress({ current: products.length, total: products.length, phase: 'Complete!' });
       setAllResults(allBatchResults);
       
@@ -258,7 +325,7 @@ export default function URPCMatcher() {
       
       // Handle based on review mode
       if (reviewMode === 'interactive') {
-        console.log('📊 Interactive mode - analyzing results...');
+        console.log('≡ƒôè Interactive mode - analyzing results...');
         console.log('Total results:', allBatchResults.length);
         
         // Separate results by score
@@ -266,7 +333,7 @@ export default function URPCMatcher() {
         const needsReview = allBatchResults.filter(r => r.matchedName && r.score < 9 && r.score >= 5);
         const lowScore = allBatchResults.filter(r => !r.matchedName || r.score < 5);
         
-        console.log('High confidence (≥9):', highConfidence.length);
+        console.log('High confidence (ΓëÑ9):', highConfidence.length);
         console.log('Needs review (5-8):', needsReview.length);
         console.log('Low score (<5):', lowScore.length);
         
@@ -285,7 +352,7 @@ export default function URPCMatcher() {
         
         if (needsReview.length > 0) {
           // Show items that need review
-          console.log('✅ Starting interactive review for', needsReview.length, 'items');
+          console.log('Γ£à Starting interactive review for', needsReview.length, 'items');
           console.log('Setting showReview to TRUE');
           console.log('Review queue:', needsReview);
           
@@ -300,11 +367,18 @@ export default function URPCMatcher() {
           }, 500);
         } else {
           // No items to review - show all results
-          console.log('ℹ️ No items need review - showing final results');
-          console.log('All items were either auto-accepted (≥9) or auto-rejected (<5)');
+          console.log('Γä╣∩╕Å No items need review - showing final results');
+          console.log('All items were either auto-accepted (ΓëÑ9) or auto-rejected (<5)');
           const finalResults = [...initialAccepted, ...initialRejected];
+          finalResults.sort((a: any, b: any) => (a.originalIndex || 0) - (b.originalIndex || 0));
           setFinalResults(finalResults);
           saveSession(finalResults, apiStats, true);
+          
+          // Mark job as completed
+          if (currentJobId) {
+            completeJob(currentJobId, finalResults, apiStats);
+          }
+          
           setProcessing(false);
         }
       } else if (reviewMode === 'aionly') {
@@ -325,14 +399,24 @@ export default function URPCMatcher() {
         
         // Show ALL results (approved with data + rejected without data)
         const allResults = [...approved, ...rejected];
+        allResults.sort((a: any, b: any) => (a.originalIndex || 0) - (b.originalIndex || 0));
         setFinalResults(allResults);
         
         // Save final session
         saveSession(allResults, apiStats, true);
+        
+        // Mark job as completed
+        if (currentJobId) {
+          completeJob(currentJobId, allResults, apiStats);
+        }
+        
         setProcessing(false);
       }
       
     } catch (error: any) {
+      // Sort partial results by original index
+      allBatchResults.sort((a: any, b: any) => (a.originalIndex || 0) - (b.originalIndex || 0));
+      
       // Save partial results on error
       if (allBatchResults.length > 0) {
         const batchApiStats = {
@@ -340,8 +424,14 @@ export default function URPCMatcher() {
           gptCalls: allBatchResults.filter(r => r.matchedName).length,
         };
         saveSession(allBatchResults, batchApiStats, false, error.message);
+        
+        // Mark job as errored
+        if (currentJobId) {
+          errorJob(currentJobId, error.message, allBatchResults, batchApiStats);
+        }
+        
         setFinalResults(allBatchResults);
-        alert(`Error occurred but ${allBatchResults.length} items were saved!\n\nError: ${error.message}\n\nPartial results are shown below and saved in History.`);
+        alert(`Error occurred but ${allBatchResults.length} items were saved!\n\nError: ${error.message}\n\nPartial results are shown below and saved.`);
       } else {
         alert('Error: ' + (error.message || 'Processing failed'));
       }
@@ -357,8 +447,15 @@ export default function URPCMatcher() {
     
     if (currentReviewIndex + 1 >= reviewQueue.length) {
       // Review complete - show ALL results
+      newReviewedResults.sort((a: any, b: any) => (a.originalIndex || 0) - (b.originalIndex || 0));
       setFinalResults(newReviewedResults);
       saveSession(newReviewedResults, apiStats, true);
+      
+      // Mark job as completed
+      if (currentJobId) {
+        completeJob(currentJobId, newReviewedResults, apiStats);
+      }
+      
       setShowReview(false);
     } else {
       setCurrentReviewIndex(currentReviewIndex + 1);
@@ -381,8 +478,15 @@ export default function URPCMatcher() {
     
     if (currentReviewIndex + 1 >= reviewQueue.length) {
       // Review complete - show ALL results (including rejected)
+      newReviewedResults.sort((a: any, b: any) => (a.originalIndex || 0) - (b.originalIndex || 0));
       setFinalResults(newReviewedResults);
       saveSession(newReviewedResults, apiStats, true);
+      
+      // Mark job as completed
+      if (currentJobId) {
+        completeJob(currentJobId, newReviewedResults, apiStats);
+      }
+      
       setShowReview(false);
     } else {
       setCurrentReviewIndex(currentReviewIndex + 1);
@@ -411,7 +515,7 @@ export default function URPCMatcher() {
           <div className="flex justify-between items-start">
             <div>
               <h1 className="text-4xl font-bold text-gray-800 flex items-center gap-3">
-                <span className="text-3xl">🛒</span>
+                <span className="text-3xl">≡ƒ¢Æ</span>
                 URPC Image Scraper
               </h1>
               <p className="text-gray-600 mt-2">
@@ -503,7 +607,7 @@ export default function URPCMatcher() {
               {file && (
                 <div className="mt-4 p-3 bg-blue-50 rounded-lg">
                   <p className="text-sm font-medium text-blue-900">
-                    📄 {file.name}
+                    ≡ƒôä {file.name}
                   </p>
                   <p className="text-xs text-blue-700 mt-1">
                     {csvData.length} rows loaded
@@ -534,7 +638,7 @@ export default function URPCMatcher() {
                           className="w-4 h-4"
                         />
                         <span className="text-base font-medium flex items-center gap-1.5">
-                          <span className="text-xl">🍺</span> Alcohol
+                          <span className="text-xl">≡ƒì║</span> Alcohol
                         </span>
                       </label>
                       <label className="flex items-center gap-2 cursor-pointer">
@@ -546,7 +650,7 @@ export default function URPCMatcher() {
                           className="w-4 h-4"
                         />
                         <span className="text-base font-medium flex items-center gap-1.5">
-                          <span className="text-xl">🍿</span> CnG
+                          <span className="text-xl">≡ƒì┐</span> CnG
                         </span>
                       </label>
                     </div>
@@ -630,7 +734,7 @@ export default function URPCMatcher() {
                         />
                         <div>
                           <div className="font-medium flex items-center gap-1.5">
-                            <span className="text-base">👁️</span> Interactive Review Mode
+                            <span className="text-base">≡ƒæü∩╕Å</span> Interactive Review Mode
                           </div>
                           <div className="text-xs text-gray-600 mt-0.5">
                             Review uncertain matches (score 5-8), auto-accept confident matches (9-10)
@@ -647,7 +751,7 @@ export default function URPCMatcher() {
                         />
                         <div>
                           <div className="font-medium flex items-center gap-1.5">
-                            <span className="text-base">🤖</span> AI Review Only Mode
+                            <span className="text-base">≡ƒñû</span> AI Review Only Mode
                           </div>
                           <div className="text-xs text-gray-600 mt-0.5">
                             Auto-reject uncertain matches (score &lt; 9), no user review needed
@@ -666,7 +770,7 @@ export default function URPCMatcher() {
                 >
                   {processing ? (
                     <span className="flex items-center justify-center gap-2">
-                      <span className="animate-spin">⏳</span>
+                      <span className="animate-spin">ΓÅ│</span>
                       {progress.phase} ({progress.current}/{progress.total})
                     </span>
                   ) : (
@@ -704,7 +808,7 @@ export default function URPCMatcher() {
           <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-semibold flex items-center gap-2">
-                ✅ Results ({finalResults.length})
+                Γ£à Results ({finalResults.length})
               </h2>
               <button
                 onClick={downloadCSV}
