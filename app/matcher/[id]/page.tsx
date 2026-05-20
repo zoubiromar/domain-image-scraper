@@ -7,7 +7,7 @@ import Papa from 'papaparse';
 import { ArrowLeft, Download, RefreshCw } from 'lucide-react';
 import { getJob } from '@/lib/job-manager';
 
-export default function URPCJobPage() {
+export default function MatcherJobPage() {
   const params = useParams();
   const router = useRouter();
   const jobId = params.id as string;
@@ -25,7 +25,7 @@ export default function URPCJobPage() {
 
     // Load job from Blob/localStorage
     const loadJob = async () => {
-      const loadedJob = await getJob('urpc', jobId);
+      const loadedJob = await getJob('matcher', jobId);
       
       if (!loadedJob) {
         setNotFound(true);
@@ -39,7 +39,7 @@ export default function URPCJobPage() {
       // If job is in progress, poll for updates
       if (loadedJob.status === 'processing') {
         const interval = setInterval(async () => {
-          const updatedJob = await getJob('urpc', jobId);
+          const updatedJob = await getJob('matcher', jobId);
           if (updatedJob) {
             setJob(updatedJob);
             
@@ -65,13 +65,13 @@ export default function URPCJobPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `urpc_results_${jobId}.csv`;
+    a.download = `matcher_results_${jobId}.csv`;
     a.click();
   };
 
   const handleResume = () => {
-    // Navigate back to main URPC page which will detect the in-progress job
-    router.push('/urpc');
+    // Navigate back to main catalog page which will detect the in-progress job
+    router.push('/matcher');
   };
 
   if (loading) {
@@ -94,11 +94,11 @@ export default function URPCJobPage() {
             The job <code className="bg-gray-200 px-2 py-1 rounded">{jobId}</code> could not be found.
           </p>
           <Link
-            href="/urpc"
+            href="/matcher"
             className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
-            Back to URPC Matcher
+            Back to Catalog Matcher
           </Link>
         </div>
       </div>
@@ -115,13 +115,13 @@ export default function URPCJobPage() {
       <div className="max-w-6xl mx-auto p-8">
         {/* Header */}
         <div className="mb-8">
-          <Link href="/urpc" className="text-blue-600 hover:text-blue-700 mb-4 inline-flex items-center gap-2">
+          <Link href="/matcher" className="text-blue-600 hover:text-blue-700 mb-4 inline-flex items-center gap-2">
             <ArrowLeft className="w-4 h-4" />
-            Back to URPC Matcher
+            Back to Catalog Matcher
           </Link>
           <h1 className="text-4xl font-bold text-gray-800 flex items-center gap-3">
             <span className="text-3xl">🛒</span>
-            URPC Job: {jobId}
+            Catalog Job: {jobId}
           </h1>
           <p className="text-gray-600 mt-2">
             Created: {new Date(job.timestamp).toLocaleString()}

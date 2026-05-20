@@ -41,7 +41,7 @@ Return JSON: {"matchedName": "<name or null>", "score": <1-10>, "reasoning": "<w
 REMEMBER: same brand+type+size = 10!`;
 }
 
-function getCnGPrompt(): string {
+function getGroceryPrompt(): string {
   return `You are a convenience & grocery product matcher. Compare an input item with catalog candidates and score based on true product identity (brand, variant/flavor/type, package size/format), not minor wording differences.
 
 CATALOG SCOPE: Snacks, non-alcoholic drinks, and alcohol. Think chips, candy, cookies, soda/energy drinks/water/juice, beer/wine/spirits, ready-to-drink cocktails.
@@ -76,7 +76,7 @@ Return JSON: {"matchedName": "<name or null>", "score": <1-10>, "reasoning": "<w
 export async function verifyWithGPT(
   productName: string,
   candidates: Candidate[],
-  productType: 'alcohol' | 'cng',
+  productType: 'alcohol' | 'grocery',
   apiKey: string
 ): Promise<GPTResult> {
   const client = new OpenAI({ apiKey });
@@ -85,7 +85,7 @@ export async function verifyWithGPT(
     .map((c, i) => `${i + 1}. ${c.name} (Hybrid score: ${c.score.toFixed(1)}/10)`)
     .join('\n');
   
-  const systemPrompt = productType === 'cng' ? getCnGPrompt() : getAlcoholPrompt();
+  const systemPrompt = productType === 'grocery' ? getGroceryPrompt() : getAlcoholPrompt();
   
   const userPrompt = `Product: "${productName}"
 
@@ -129,7 +129,7 @@ REMINDERS:
 // Batch GPT verification for multiple products
 export async function batchVerifyWithGPT(
   products: Array<{ name: string; candidates: Candidate[] }>,
-  productType: 'alcohol' | 'cng',
+  productType: 'alcohol' | 'grocery',
   apiKey: string
 ): Promise<GPTResult[]> {
   // Process in parallel (up to 5 at a time to avoid rate limits)

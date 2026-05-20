@@ -26,7 +26,7 @@ interface HybridCandidate {
 
 export async function matchProducts(
   requests: MatchRequest[],
-  productType: 'alcohol' | 'cng',
+  productType: 'alcohol' | 'grocery',
   apiKey: string,
   onProgress?: (current: number, total: number) => void
 ): Promise<MatchResult[]> {

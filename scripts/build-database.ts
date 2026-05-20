@@ -24,7 +24,7 @@ function tokenizeText(text: string): string[] {
 }
 
 async function buildDatabase() {
-  console.log('🔨 Building URPC Product Database...\n');
+  console.log('🔨 Building Product Catalog Database...\n');
   
   const sourceDir = path.join(__dirname, '../data/');
   const dbPath = path.join(__dirname, '../public/database/products.db');
@@ -58,7 +58,7 @@ async function buildDatabase() {
       tokens TEXT
     );
     
-    CREATE TABLE cng_products (
+    CREATE TABLE grocery_products (
       upc TEXT PRIMARY KEY,
       item_name TEXT NOT NULL,
       primary_photo_url TEXT,
@@ -72,7 +72,7 @@ async function buildDatabase() {
   
   // Load Alcohol data
   console.log('📦 Loading Alcohol data from XLSX...');
-  const alcoholXlsxPath = path.join(sourceDir, 'URPC Alcohol Photos w photoIDs.xlsx');
+  const alcoholXlsxPath = path.join(sourceDir, 'alcohol_catalog.xlsx');
   
   if (!fs.existsSync(alcoholXlsxPath)) {
     console.error('❌ Alcohol XLSX file not found:', alcoholXlsxPath);
@@ -116,28 +116,28 @@ async function buildDatabase() {
   const alcoholCount = db.prepare('SELECT COUNT(*) as count FROM alcohol_products').get() as { count: number };
   console.log(`✅ Inserted ${alcoholCount.count} alcohol products\n`);
   
-  // Load CnG data
-  console.log('📦 Loading CnG data from XLSX...');
-  const cngXlsxPath = path.join(sourceDir, 'URPC CnG (Alc_Snack_Drinks) Photos w photoIDs.xlsx');
+  // Load Grocery data
+  console.log('📦 Loading Grocery data from XLSX...');
+  const groceryXlsxPath = path.join(sourceDir, 'grocery_catalog.xlsx');
   
-  if (!fs.existsSync(cngXlsxPath)) {
-    console.error('❌ CnG XLSX file not found:', cngXlsxPath);
+  if (!fs.existsSync(groceryXlsxPath)) {
+    console.error('❌ Grocery XLSX file not found:', groceryXlsxPath);
     process.exit(1);
   }
   
-  const cngWorkbook = XLSX.readFile(cngXlsxPath);
-  const cngSheetName = cngWorkbook.SheetNames[0]; // First sheet
-  const cngData = XLSX.utils.sheet_to_json(cngWorkbook.Sheets[cngSheetName], { raw: false });
+  const groceryWorkbook = XLSX.readFile(groceryXlsxPath);
+  const grocerySheetName = groceryWorkbook.SheetNames[0]; // First sheet
+  const groceryData = XLSX.utils.sheet_to_json(groceryWorkbook.Sheets[grocerySheetName], { raw: false });
   
-  console.log(`   Found ${cngData.length} CnG products`);
+  console.log(`   Found ${groceryData.length} Grocery products`);
   
-  // Insert CnG data
-  const cngInsert = db.prepare(`
-    INSERT OR REPLACE INTO cng_products (upc, item_name, primary_photo_url, primary_photo_id, normalized_name, tokens)
+  // Insert Grocery data
+  const groceryInsert = db.prepare(`
+    INSERT OR REPLACE INTO grocery_products (upc, item_name, primary_photo_url, primary_photo_id, normalized_name, tokens)
     VALUES (?, ?, ?, ?, ?, ?)
   `);
   
-  const cngTransaction = db.transaction((products: any[]) => {
+  const groceryTransaction = db.transaction((products: any[]) => {
     for (const product of products) {
       const itemName = String(product.item_name || '').trim();
       const photoUrl = String(product.primary_photo_url || '').trim();
@@ -147,7 +147,7 @@ async function buildDatabase() {
       const normalized = normalizeText(itemName);
       const tokens = JSON.stringify(tokenizeText(itemName));
       
-      cngInsert.run(
+      groceryInsert.run(
         String(product.upc || ''),
         itemName,
         photoUrl,
@@ -158,17 +158,17 @@ async function buildDatabase() {
     }
   });
   
-  cngTransaction(cngData);
-  const cngCount = db.prepare('SELECT COUNT(*) as count FROM cng_products').get() as { count: number };
-  console.log(`✅ Inserted ${cngCount.count} CnG products\n`);
+  groceryTransaction(groceryData);
+  const groceryCount = db.prepare('SELECT COUNT(*) as count FROM grocery_products').get() as { count: number };
+  console.log(`✅ Inserted ${groceryCount.count} Grocery products\n`);
   
   // Create indexes for fast lookups
   console.log('📊 Creating indexes...');
   db.exec(`
     CREATE INDEX idx_alcohol_name ON alcohol_products(item_name);
     CREATE INDEX idx_alcohol_normalized ON alcohol_products(normalized_name);
-    CREATE INDEX idx_cng_name ON cng_products(item_name);
-    CREATE INDEX idx_cng_normalized ON cng_products(normalized_name);
+    CREATE INDEX idx_grocery_name ON grocery_products(item_name);
+    CREATE INDEX idx_grocery_normalized ON grocery_products(normalized_name);
   `);
   console.log('✅ Indexes created\n');
   

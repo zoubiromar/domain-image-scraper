@@ -109,13 +109,13 @@ export interface Product {
 
 export async function fuzzySearch(
   query: string,
-  productType: 'alcohol' | 'cng',
+  productType: 'alcohol' | 'grocery',
   limit: number = 50
 ): Promise<Product[]> {
   const db = await getDatabase();
   if (!db) return [];
   
-  const table = productType === 'alcohol' ? 'alcohol_products' : 'cng_products';
+  const table = productType === 'alcohol' ? 'alcohol_products' : 'grocery_products';
   const normalized = query.toLowerCase().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
   const words = normalized.split(' ').filter((w: string) => w.length > 1);
   
@@ -138,12 +138,12 @@ export async function fuzzySearch(
   }
 }
 
-export async function getAllProducts(productType: 'alcohol' | 'cng'): Promise<Product[]> {
+export async function getAllProducts(productType: 'alcohol' | 'grocery'): Promise<Product[]> {
   const db = await getDatabase();
   if (!db) return [];
   
   try {
-    const table = productType === 'alcohol' ? 'alcohol_products' : 'cng_products';
+    const table = productType === 'alcohol' ? 'alcohol_products' : 'grocery_products';
     return db.prepare(`SELECT * FROM ${table}`).all() as Product[];
   } catch (error) {
     console.error('Database query error:', error);
@@ -151,12 +151,12 @@ export async function getAllProducts(productType: 'alcohol' | 'cng'): Promise<Pr
   }
 }
 
-export async function getProductByUPC(upc: string, productType: 'alcohol' | 'cng'): Promise<Product | null> {
+export async function getProductByUPC(upc: string, productType: 'alcohol' | 'grocery'): Promise<Product | null> {
   const db = await getDatabase();
   if (!db) return null;
   
   try {
-    const table = productType === 'alcohol' ? 'alcohol_products' : 'cng_products';
+    const table = productType === 'alcohol' ? 'alcohol_products' : 'grocery_products';
     return db.prepare(`SELECT * FROM ${table} WHERE upc = ?`).get(upc) as Product | null;
   } catch (error) {
     console.error('Database query error:', error);

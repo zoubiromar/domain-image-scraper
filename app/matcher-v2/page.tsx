@@ -33,7 +33,7 @@ interface MatchResult {
   logs: string;
 }
 
-export default function URPCMatcher() {
+export default function CatalogMatcher() {
   const router = useRouter();
   
   const [file, setFile] = useState<File | null>(null);
@@ -41,7 +41,7 @@ export default function URPCMatcher() {
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   const [columns, setColumns] = useState<string[]>([]);
   const [selectedColumn, setSelectedColumn] = useState('');
-  const [productType, setProductType] = useState<'alcohol' | 'cng'>('alcohol');
+  const [productType, setProductType] = useState<'alcohol' | 'grocery'>('alcohol');
   const [reviewMode, setReviewMode] = useState<'interactive' | 'aionly'>('interactive');
   const [apiKey, setApiKey] = useState('');
   const [startRow, setStartRow] = useState(2);
@@ -66,13 +66,13 @@ export default function URPCMatcher() {
   const saveSession = (results: MatchResult[], costs: any, completed: boolean, error?: string) => {
     // Job system handles saving, no need for separate sessions
     // This prevents duplicate storage and QuotaExceededError
-    console.log('[URPC-V2] Skipping session save (job system handles it)');
+    console.log('[Matcher-V2] Skipping session save (job system handles it)');
   };
 
   const loadSessions = () => {
     try {
       // Load jobs from new job system
-      const jobs = getAllJobs('urpc');
+      const jobs = getAllJobs('matcher');
       // Convert jobs to session format for compatibility
       const sessions = jobs.map(job => ({
         key: `job_${job.id}`,
@@ -87,15 +87,15 @@ export default function URPCMatcher() {
       }));
       setSavedSessions(sessions);
     } catch (e) {
-      console.error('[URPC] Failed to load sessions:', e);
+      console.error('[Matcher] Failed to load sessions:', e);
     }
   };
 
   const loadSessionData = (session: any) => {
     // Check if this is a job (has ID that matches job pattern)
-    if (session.id && session.id.startsWith('urpc_')) {
+    if (session.id && session.id.startsWith('matcher_')) {
       // Navigate to job URL
-      router.push(`/urpc/${session.id}`);
+      router.push(`/matcher/${session.id}`);
     } else {
       // Old session format - load directly
       setFinalResults(session.results);
@@ -106,15 +106,15 @@ export default function URPCMatcher() {
   };
 
   const deleteSession = (key: string) => {
-    // Extract job ID from key (format: job_urpc_timestamp_random)
+    // Extract job ID from key (format: job_matcher_timestamp_random)
     const jobId = key.replace('job_', '');
-    deleteJob('urpc', jobId);
+    deleteJob('matcher', jobId);
     loadSessions();
   };
 
   const clearAllSessions = () => {
-    if (confirm('Clear all URPC sessions? This cannot be undone.')) {
-      deleteAllJobs('urpc');
+    if (confirm('Clear all catalog sessions? This cannot be undone.')) {
+      deleteAllJobs('matcher');
       loadSessions();
     }
   };
@@ -122,11 +122,11 @@ export default function URPCMatcher() {
   // Clean up old jobs and load sessions on mount
   useEffect(() => {
     // Auto-cleanup: Keep only last 5 jobs to prevent localStorage quota issues
-    const jobs = getAllJobs('urpc');
+    const jobs = getAllJobs('matcher');
     if (jobs.length > 5) {
       const oldJobs = jobs.slice(5); // Jobs beyond the 5 most recent
-      oldJobs.forEach(job => deleteJob('urpc', job.id));
-      console.log(`[URPC-V2] Cleaned up ${oldJobs.length} old jobs`);
+      oldJobs.forEach(job => deleteJob('matcher', job.id));
+      console.log(`[Matcher-V2] Cleaned up ${oldJobs.length} old jobs`);
     }
     
     loadSessions();
@@ -219,14 +219,14 @@ export default function URPCMatcher() {
         .filter(p => p.name && p.name.trim());
       
       // Create job and navigate to job URL
-      const job = createJob('urpc', {
+      const job = createJob('matcher', {
         productType,
         reviewMode,
         productCount: products.length,
       }, products.length);
       
       setCurrentJobId(job.id);
-      router.push(`/urpc/${job.id}`);
+      router.push(`/matcher/${job.id}`);
       
       setProgress({ current: 0, total: products.length, phase: 'Processing products...' });
       
@@ -235,7 +235,7 @@ export default function URPCMatcher() {
       for (let i = 0; i < products.length; i++) {
         // Check for cancel request BEFORE each product
         if (cancelRequested) {
-          console.log('[URPC] Cancel requested, stopping immediately...');
+          console.log('[Matcher] Cancel requested, stopping immediately...');
           const cancelApiStats = {
             embeddingCalls: allBatchResults.length * 51,
             gptCalls: allBatchResults.filter(r => r.matchedName).length,
@@ -282,7 +282,7 @@ export default function URPCMatcher() {
         const data = await response.json();
         
         if (data.databaseMissing) {
-          alert('ΓÜá∩╕Å Database Not Available\n\nThe URPC database is not set up. Please use locally or contact admin.');
+          alert('Database Not Available\n\nThe catalog database is not set up. Please run locally or configure DATABASE_BLOB_URL.');
           setProcessing(false);
           return;
         }
@@ -499,7 +499,7 @@ export default function URPCMatcher() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'urpc_matched_results.csv';
+    a.download = 'matcher_matched_results.csv';
     a.click();
   };
 
@@ -516,10 +516,10 @@ export default function URPCMatcher() {
             <div>
               <h1 className="text-4xl font-bold text-gray-800 flex items-center gap-3">
                 <span className="text-3xl">🛒</span>
-                URPC Image Scraper V2 (Experimental)
+                Catalog Matcher V2 (Experimental)
               </h1>
               <p className="text-gray-600 mt-2">
-                Match products against 244K+ Alcohol & CnG database with AI verification
+                Match products against your alcohol and grocery catalog with AI verification
               </p>
             </div>
             <div className="flex gap-2">
@@ -644,13 +644,13 @@ export default function URPCMatcher() {
                       <label className="flex items-center gap-2 cursor-pointer">
                         <input
                           type="radio"
-                          value="cng"
-                          checked={productType === 'cng'}
-                          onChange={(e) => setProductType(e.target.value as 'cng')}
+                          value="grocery"
+                          checked={productType === 'grocery'}
+                          onChange={(e) => setProductType(e.target.value as 'grocery')}
                           className="w-4 h-4"
                         />
                         <span className="text-base font-medium flex items-center gap-1.5">
-                          <span className="text-xl">🍿</span> CnG
+                          <span className="text-xl">🍿</span> Grocery
                         </span>
                       </label>
                     </div>
@@ -901,7 +901,7 @@ export default function URPCMatcher() {
             onDelete={deleteSession}
             onClearAll={clearAllSessions}
             onClose={() => setShowHistory(false)}
-            toolName="URPC Matcher"
+            toolName="Catalog Matcher"
           />
         )}
       </div>

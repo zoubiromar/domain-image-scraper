@@ -7,7 +7,7 @@ export default function QADebugPage() {
   const [itemName, setItemName] = useState('Citrons biologiques / Organic Lemons');
   const [size, setSize] = useState('1 ct');
   const [rawData, setRawData] = useState('Organic Lemons');
-  const [imageUrl, setImageUrl] = useState('https://img.cdn4dd.com/cdn-cgi/image/fit=contain,width=1200,height=672,format=auto/https://doordash-static.s3.amazonaws.com/media/photosV2/facbd5dc-30ea-456e-9130-b61291153321-retina-large.jpg');
+  const [imageUrl, setImageUrl] = useState('https://via.placeholder.com/1200x672?text=Sample+Product+Image');
   const [testMode, setTestMode] = useState<'name' | 'image'>('name');
   const [model, setModel] = useState('gpt-4o-mini');
   const [apiKey, setApiKey] = useState('');

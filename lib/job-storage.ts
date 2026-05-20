@@ -2,12 +2,15 @@
  * Job Storage - Vercel Blob Integration
  * 
  * Stores jobs in Vercel Blob for unlimited storage and cross-device access.
- * Uses the same Blob store as the URPC database.
+ * Uses the same Blob store as the catalog database.
  */
 
 import { Job } from './job-manager';
 
-const BLOB_BASE_URL = 'https://cikjq7cnoxpkq7ue.public.blob.vercel-storage.com';
+// Configure via NEXT_PUBLIC_BLOB_BASE_URL in your Vercel environment.
+// Falls back to an empty string when unset; Blob saves will no-op locally
+// and the localStorage cache becomes the source of truth.
+const BLOB_BASE_URL = process.env.NEXT_PUBLIC_BLOB_BASE_URL || '';
 
 // ============================================================================
 // BLOB OPERATIONS
@@ -17,9 +20,10 @@ const BLOB_BASE_URL = 'https://cikjq7cnoxpkq7ue.public.blob.vercel-storage.com';
  * Save job to Vercel Blob
  */
 export async function saveJobToBlob(tool: string, job: Job): Promise<boolean> {
+  if (!BLOB_BASE_URL) return false;
   try {
     const blobUrl = `${BLOB_BASE_URL}/jobs/${tool}_${job.id}.json`;
-    
+
     const response = await fetch(blobUrl, {
       method: 'PUT',
       headers: {
@@ -45,9 +49,10 @@ export async function saveJobToBlob(tool: string, job: Job): Promise<boolean> {
  * Load job from Vercel Blob
  */
 export async function loadJobFromBlob(tool: string, jobId: string): Promise<Job | null> {
+  if (!BLOB_BASE_URL) return null;
   try {
     const blobUrl = `${BLOB_BASE_URL}/jobs/${tool}_${jobId}.json`;
-    
+
     const response = await fetch(blobUrl);
 
     if (response.ok) {
@@ -71,9 +76,10 @@ export async function loadJobFromBlob(tool: string, jobId: string): Promise<Job 
  * Delete job from Vercel Blob
  */
 export async function deleteJobFromBlob(tool: string, jobId: string): Promise<boolean> {
+  if (!BLOB_BASE_URL) return false;
   try {
     const blobUrl = `${BLOB_BASE_URL}/jobs/${tool}_${jobId}.json`;
-    
+
     const response = await fetch(blobUrl, {
       method: 'DELETE',
     });

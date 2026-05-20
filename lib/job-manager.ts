@@ -3,7 +3,7 @@
  * 
  * Jobs are stored in Vercel Blob (server-side) with localStorage fallback.
  * This enables:
- * - URL-based job access (/urpc/{jobId})
+ * - URL-based job access (/matcher/{jobId})
  * - Resume interrupted processing
  * - Progress persistence
  * - Truly shareable links (across devices!)
@@ -20,7 +20,7 @@ export type JobStatus = 'processing' | 'completed' | 'cancelled' | 'error';
 
 export interface Job {
   id: string;
-  tool: 'urpc' | 'domain' | 'qa';
+  tool: 'matcher' | 'domain' | 'qa';
   status: JobStatus;
   progress: {
     current: number;
@@ -54,7 +54,7 @@ export function generateJobId(): string {
  * Create a new job
  */
 export function createJob(
-  tool: 'urpc' | 'domain' | 'qa',
+  tool: 'matcher' | 'domain' | 'qa',
   config: any,
   totalItems: number
 ): Job {
@@ -156,7 +156,7 @@ export function updateJobProgress(
   let job: Job | null = null;
   let toolPrefix = '';
   
-  for (const tool of ['urpc', 'domain', 'qa']) {
+  for (const tool of ['matcher', 'domain', 'qa']) {
     const key = `${tool}_job_${jobId}`;
     const data = localStorage.getItem(key);
     if (data) {
@@ -203,7 +203,7 @@ export function completeJob(jobId: string, results: any[], costs: any): void {
   let job: Job | null = null;
   let toolPrefix = '';
   
-  for (const tool of ['urpc', 'domain', 'qa']) {
+  for (const tool of ['matcher', 'domain', 'qa']) {
     const key = `${tool}_job_${jobId}`;
     const data = localStorage.getItem(key);
     if (data) {
@@ -250,7 +250,7 @@ export function cancelJob(jobId: string, partialResults: any[], costs: any): voi
   let job: Job | null = null;
   let toolPrefix = '';
   
-  for (const tool of ['urpc', 'domain', 'qa']) {
+  for (const tool of ['matcher', 'domain', 'qa']) {
     const key = `${tool}_job_${jobId}`;
     const data = localStorage.getItem(key);
     if (data) {
@@ -294,7 +294,7 @@ export function errorJob(jobId: string, error: string, partialResults: any[], co
   let job: Job | null = null;
   let toolPrefix = '';
   
-  for (const tool of ['urpc', 'domain', 'qa']) {
+  for (const tool of ['matcher', 'domain', 'qa']) {
     const key = `${tool}_job_${jobId}`;
     const data = localStorage.getItem(key);
     if (data) {

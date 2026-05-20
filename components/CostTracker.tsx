@@ -6,7 +6,7 @@ interface CostTrackerProps {
   matchedProducts: number;
   embeddingCalls: number;
   gptCalls: number;
-  productType: 'alcohol' | 'cng';
+  productType: 'alcohol' | 'grocery';
 }
 
 export default function CostTracker({
@@ -35,7 +35,7 @@ export default function CostTracker({
   
   const costPerProduct = totalProducts > 0 ? totalCost / totalProducts : 0;
   
-  const reportText = `URPC ${productType.toUpperCase()} Image Scraper - API Consumption Report
+  const reportText = `Catalog Matcher (${productType.toUpperCase()}) - API Consumption Report
 =========================================
 Date: ${new Date().toLocaleString()}
 

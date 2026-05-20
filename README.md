@@ -1,250 +1,86 @@
-# Image Scraper Suite 🔍🛒
+# Image Scraper Suite
 
-**Dual-tool solution**: AI-powered URPC matching + Domain-specific image scraping
+Three-tool web app for product catalog work: a domain-restricted image scraper, an AI-powered catalog matcher, and a listing QA helper.
 
-Live at: [domain-image-scraper.vercel.app](https://domain-image-scraper.vercel.app)
+[Live demo](https://domain-image-scraper.vercel.app)
 
----
+## What it does
 
-## 🎯 Two Powerful Tools
+### Tool 1: Domain-restricted image scraper
+Given a product name and a target e-commerce domain (e.g., `metro.ca`, `walmart.ca`), the scraper uses SerpAPI to perform a Google Images search restricted to that domain and returns ranked candidate images. Multi-factor scoring filters out low-quality matches and de-duplicates results.
 
-### 1. 🛒 URPC Image Scraper (New!)
-**AI-powered product matching** against 244K+ database
+Use case: you have a product entry in a catalog and you need an image URL from a specific retailer's site.
 
-**Features**:
-- Match Alcohol (104K items) & CnG (140K items) products
-- AI verification with GPT-4o-mini (98% accuracy)
-- Handles spelling variations ("Titos" = "Tito's")
-- Batch processing with embeddings
-- Auto-reject uncertain matches (AI Only mode)
-- Returns: Image URL, UPC, Photo ID, Score
+### Tool 2: Catalog matcher
+Given a product name (which may contain spelling variations, abbreviations, or partial info), the matcher finds the best candidate in a catalog database using a three-stage pipeline:
 
-**Speed**:
-- 50 products: ~5 seconds
-- 100 products: ~10 seconds  
-- No batch limit (vs 200 in Google Sheets version)
+1. Fuzzy pre-filter (fast lexical narrowing against the SQLite catalog)
+2. OpenAI text embeddings for semantic candidate retrieval (k-NN over the top fuzzy candidates)
+3. GPT-4o-mini for final verification of the top candidates ("is this the same product?")
 
-### 2. 🌐 Domain Web Scraper (Existing)
-**Google Images search** from specific e-commerce domains
+The verification step is what makes the matcher resilient to noise. Fuzzy gets you to the right shelf, embeddings get you to the right neighborhood, and GPT-4o-mini confirms the actual match.
 
-**Features**:
-- Target specific domains (metro.ca, etc.)
-- Multi-factor scoring & ranking
-- Quality filtering (score >= 5.0)
-- SerpAPI powered
-- Batch processing
+Use case: you have a noisy list of product names (from a vendor submission, OCR output, or third-party feed) and you need to map them to canonical entries in an existing catalog. Returns the matched product with image URL, UPC, and photo ID.
 
----
+### Tool 3: Listing QA
+Given a CSV of product listings, the QA helper runs two GPT-based checks per row:
 
-## 🚀 Quick Start
+- Name and text QA against configurable style rules (length, formatting, brand position, bilingual structure for FR/EN catalogs)
+- Image QA using GPT-4o vision: does the image actually depict the product the name describes, with the right pack size and count?
 
-### Local Development
+Results include a 1-10 score, error type tags, comments, and a suggested correction. Costs are tracked per run.
+
+## Architecture
+
+- **Frontend:** Next.js 14 (App Router, TypeScript), Tailwind CSS
+- **Image scraper backend:** Next.js API routes calling SerpAPI's Google Images endpoint
+- **Matcher backend:** Next.js API routes, OpenAI Embeddings (`text-embedding-3-small`), better-sqlite3 for the catalog index, OpenAI Chat Completions (`gpt-4o-mini`) for verification
+- **QA backend:** Next.js API routes calling OpenAI Chat Completions and GPT-4o vision, batching 30 rows per request
+- **Job system:** long-running jobs are persisted to Vercel Blob with a localStorage cache, so users can close the tab and come back to a job URL
+- **Deployment:** Vercel
+
+## Local development
 
 ```bash
-# Install dependencies
+# Install
 npm install
 
-# Build database (optional - only for URPC)
-npm run build-db
+# Environment: create .env.local with these
+# OPENAI_API_KEY=...
+# SERP_API_KEY=...
+# DATABASE_BLOB_URL=...    # only needed for the matcher in production
 
-# Start dev server
+# Dev server
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000)
+Open [http://localhost:3000](http://localhost:3000).
 
-### Deployment to Vercel
+## Configuration
 
-**Simple Deploy** (Domain Scraper only):
-```bash
-git push origin main
-```
-Vercel auto-deploys. URPC matcher will show "database not found" until you add data files.
+### Catalog data (matcher only)
 
-**Full Deploy** (Both tools):
-See `URPC_DEPLOYMENT.md` for instructions on handling large database files.
+The matcher reads a SQLite database at `public/database/products.db`. To build it, place XLSX files in `data/` and run `npm run build-db`. Expected schema in each XLSX:
 
----
+| Column | Description |
+|---|---|
+| `upc` | Product UPC |
+| `item_name` | Display name |
+| `primary_photo_url` | Image URL |
+| `primary_photo_id` | Photo identifier |
 
-## 📦 Tech Stack
+Two tables are built: `alcohol_products` and `grocery_products`. Substitute any product catalog with this schema.
 
-- **Framework**: Next.js 14 (App Router)
-- **UI**: Tailwind CSS + Radix UI
-- **Database**: SQLite (better-sqlite3)
-- **AI**: OpenAI (embeddings + GPT-4o-mini)
-- **Matching**: Fuzzy + Semantic Embeddings + GPT
-- **Deployment**: Vercel
+In production, the matcher loads the SQLite file from a Vercel Blob URL set via `DATABASE_BLOB_URL`. The blob file is cached to `/tmp` on cold start.
 
----
+### API keys
+- `OPENAI_API_KEY`: matcher and QA. The matcher UI also accepts a per-session key entered in the browser.
+- `SERP_API_KEY`: domain image scraper.
 
-## 📁 Project Structure
+## Notes
 
-```
-domain-image-scraper/
-├── app/
-│   ├── page.tsx              # Home page (tool selector)
-│   ├── urpc/page.tsx         # URPC matcher page
-│   ├── domain/page.tsx       # Domain scraper page
-│   └── api/
-│       ├── match/route.ts    # URPC matching API
-│       └── scrape/route.ts   # Domain scraping API
-├── lib/
-│   ├── database.ts           # SQLite queries
-│   ├── fuzzy-matcher.ts      # Pre-filter logic
-│   ├── embedding-batcher.ts  # Batch embeddings (10x faster!)
-│   ├── gpt-verifier.ts       # AI verification
-│   └── matcher.ts            # Main matching pipeline
-├── components/
-│   ├── SimpleScraperForm.tsx # Domain scraper form
-│   └── SimpleResultsDisplay.tsx # Results display
-├── scripts/
-│   └── build-database.ts     # XLSX → SQLite converter
-├── data/                     # XLSX source files (not in git)
-└── public/database/          # SQLite database (built on deploy)
-```
+This is a personal project demonstrating AI-assisted catalog work patterns: embedding retrieval, GPT verification, vision QA, and a small job-tracking layer over Vercel Blob. The matching and QA logic is generic. No proprietary data is included in this repo; the catalog file is gitignored and must be supplied by the user.
 
----
+## License
 
-## 🎨 Features
-
-### URPC Matcher
-- CSV upload with column mapping
-- Product type selection (Alcohol/CnG)
-- Review modes:
-  - **Interactive**: Review uncertain matches
-  - **AI Only**: Auto-reject score < 9
-- Real-time progress updates
-- Results export to CSV
-- Preserves UPC leading zeros
-
-### Domain Scraper
-- Batch product search
-- Domain filtering
-- Image quality scoring
-- Deduplication
-- Results export
-
----
-
-## 💰 Cost
-
-**URPC Matcher**:
-- ~$0.00015 per product (OpenAI)
-- 100 products = ~$0.015 (1.5 cents)
-- 1,000 products = ~$0.15 (15 cents)
-
-**Domain Scraper**:
-- Requires SerpAPI key
-- ~$0.005 per product
-- 100 searches/month free tier
-
----
-
-## 🎯 Performance
-
-### URPC Matcher vs Google Sheets:
-| Metric | Google Sheets | Web App | Improvement |
-|--------|--------------|---------|-------------|
-| 50 products | ~40s | ~5s | **8x faster** |
-| 100 products | ~80s | ~10s | **8x faster** |
-| Max batch | 200 | Unlimited | **No limit** |
-
-**Speed optimizations**:
-- SQLite with indexes
-- Batch embedding generation (100 at once)
-- Parallel processing
-- Pre-computed tokens
-
----
-
-## 📝 Usage
-
-### URPC Matcher:
-1. Go to `/urpc`
-2. Upload CSV with product names
-3. Select column containing products
-4. Choose Alcohol or CnG
-5. Enter OpenAI API key
-6. Select review mode
-7. Click "Start Matching"
-8. Download results
-
-### Domain Scraper:
-1. Go to `/domain`
-2. Enter product names or upload CSV
-3. Specify domains (optional)
-4. Enter SerpAPI key
-5. Click "Start Scraping"
-6. Download results
-
----
-
-## 🔧 Configuration
-
-### Environment Variables (Optional)
-
-Create `.env.local` for development:
-
-```env
-# OpenAI API Key (can be entered in UI instead)
-OPENAI_API_KEY=sk-...
-
-# SerpAPI Key  
-SERP_API_KEY=your_key_here
-```
-
----
-
-## 📊 Database
-
-**URPC Database** (SQLite):
-- Alcohol: 104,325 products
-- CnG: 140,625 products
-- Total: 136.84 MB
-- Indexed for fast lookups
-
-**Columns**:
-- upc
-- item_name
-- primary_photo_url
-- primary_photo_id
-- normalized_name (pre-computed)
-- tokens (pre-computed)
-
----
-
-## 🚧 Known Limitations
-
-- **Database size**: Too large for GitHub, requires external hosting or build-time generation
-- **Vercel build time**: Database build may timeout on free tier
-- **Rate limits**: OpenAI API rate limits apply
-- **Max batch**: 200 products per request (UI limit)
-
----
-
-## 🤝 Contributing
-
-Contributions welcome! 
-
-1. Fork the repo
-2. Create feature branch
-3. Make changes
-4. Push and create PR
-
----
-
-## 📄 License
-
-MIT License
-
----
-
-## 👤 Author
-
-**Omar Zoubir**
-- GitHub: [@zoubiromar](https://github.com/zoubiromar)
-- Project: [domain-image-scraper](https://github.com/zoubiromar/domain-image-scraper)
-
----
-
-Made with ❤️ using Next.js, OpenAI, and Vercel
+MIT

@@ -1,8 +1,6 @@
-# This directory contains the source XLSX files for database building
-# Files are too large for GitHub and should be uploaded to Vercel separately
-# Required files:
-# - URPC Alcohol Photos w photoIDs.xlsx
-# - URPC CnG (Alc_Snack_Drinks) Photos w photoIDs.xlsx
-
-
-
+# Source data files for catalog database (gitignored).
+# Place your XLSX files here, then run `npm run build-db` to build the SQLite index.
+# Expected files (see scripts/build-database.ts):
+# - alcohol_catalog.xlsx
+# - grocery_catalog.xlsx
+# Each file should contain columns: upc, item_name, primary_photo_url, primary_photo_id

@@ -12,10 +12,17 @@ const nextConfig = {
       },
     ],
   },
-  // Vercel deployment optimizations
+  webpack: (config, { isServer }) => {
+    // Externalize better-sqlite3 to prevent build issues
+    if (isServer) {
+      config.externals = config.externals || [];
+      config.externals.push('better-sqlite3');
+    }
+    return config;
+  },
   swcMinify: true,
   poweredByHeader: false,
   reactStrictMode: true,
-}
+};
 
-module.exports = nextConfig
+module.exports = nextConfig;

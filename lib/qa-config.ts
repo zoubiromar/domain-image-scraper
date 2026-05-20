@@ -155,7 +155,7 @@ export const NAME_QA_PROMPT = NAME_QA_SYSTEM_PROMPT + '\n\n' + NAME_QA_RULES;
 /**
  * English Text QA - System Instructions (NOT EDITABLE)
  */
-export const ENGLISH_TEXT_QA_SYSTEM_PROMPT = `You are an automated Product Listing Quality Analyst API for English-only product listings. Return a JSON object scoring product names based on DoorDash style guide standards.
+export const ENGLISH_TEXT_QA_SYSTEM_PROMPT = `You are an automated Product Listing Quality Analyst API for English-only product listings. Return a JSON object scoring product names against catalog style guide standards.
 
 ## Input Fields
 - itemName: Display name (format: "[Brand] Product Name (Size)")

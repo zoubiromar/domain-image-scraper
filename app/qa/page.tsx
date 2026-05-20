@@ -1149,8 +1149,7 @@ export default function QAPage() {
       <footer className="mt-20 py-8 border-t border-gray-200 bg-white/50">
         <div className="container mx-auto px-4 text-center text-gray-600">
           <p>
-            © 2025 Image Scraper Suite - Built with Next.js & Vercel |{' '}
-            Made by{' '}
+            Built with Next.js and Vercel.{' '}
             <a
               href="https://github.com/zoubiromar"
               target="_blank"

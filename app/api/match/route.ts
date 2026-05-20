@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
     if (!db) {
       return NextResponse.json(
         { 
-          error: 'Database not available. The URPC database needs to be set up on this deployment. Please ensure DATABASE_BLOB_URL environment variable is set.',
+          error: 'Database not available. The catalog database needs to be set up on this deployment. Please ensure DATABASE_BLOB_URL environment variable is set.',
           databaseMissing: true
         },
         { status: 503 }
@@ -30,9 +30,9 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    if (!productType || (productType !== 'alcohol' && productType !== 'cng')) {
+    if (!productType || (productType !== 'alcohol' && productType !== 'grocery')) {
       return NextResponse.json(
-        { error: 'Product type must be "alcohol" or "cng"' },
+        { error: 'Product type must be "alcohol" or "grocery"' },
         { status: 400 }
       );
     }

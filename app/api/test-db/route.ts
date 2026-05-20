@@ -51,12 +51,12 @@ export async function GET(request: NextRequest) {
     
     try {
       const alcoholCount = db.prepare('SELECT COUNT(*) as count FROM alcohol_products').get() as { count: number };
-      const cngCount = db.prepare('SELECT COUNT(*) as count FROM cng_products').get() as { count: number };
+      const groceryCount = db.prepare('SELECT COUNT(*) as count FROM grocery_products').get() as { count: number };
       
       diagnostics.status = 'SUCCESS';
       diagnostics.alcoholProducts = alcoholCount.count;
-      diagnostics.cngProducts = cngCount.count;
-      diagnostics.totalProducts = alcoholCount.count + cngCount.count;
+      diagnostics.groceryProducts = groceryCount.count;
+      diagnostics.totalProducts = alcoholCount.count + groceryCount.count;
       
       // Test a simple query
       const sampleProduct = db.prepare('SELECT * FROM alcohol_products LIMIT 1').get();

@@ -21,12 +21,12 @@ interface MatchResult {
   logs: string;
 }
 
-export default function URPCMatcher() {
+export default function CatalogMatcher() {
   const [file, setFile] = useState<File | null>(null);
   const [csvData, setCsvData] = useState<any[]>([]);
   const [columns, setColumns] = useState<string[]>([]);
   const [selectedColumn, setSelectedColumn] = useState('');
-  const [productType, setProductType] = useState<'alcohol' | 'cng'>('alcohol');
+  const [productType, setProductType] = useState<'alcohol' | 'grocery'>('alcohol');
   const [reviewMode, setReviewMode] = useState<'interactive' | 'aionly'>('interactive');
   const [apiKey, setApiKey] = useState('');
   const [startRow, setStartRow] = useState(2);
@@ -59,17 +59,17 @@ export default function URPCMatcher() {
         error,
         config: { productType, reviewMode },
       };
-      const key = `urpc_session_${Date.now()}`;
+      const key = `matcher_session_${Date.now()}`;
       localStorage.setItem(key, JSON.stringify(session));
       loadSessions();
     } catch (e) {
-      console.error('[URPC] Failed to save session:', e);
+      console.error('[Matcher] Failed to save session:', e);
     }
   };
 
   const loadSessions = () => {
     try {
-      const keys = Object.keys(localStorage).filter(k => k.startsWith('urpc_session_'));
+      const keys = Object.keys(localStorage).filter(k => k.startsWith('matcher_session_'));
       const sessions = keys.map(key => {
         const data = localStorage.getItem(key);
         return data ? { ...JSON.parse(data), key } : null;
@@ -78,7 +78,7 @@ export default function URPCMatcher() {
       );
       setSavedSessions(sessions);
     } catch (e) {
-      console.error('[URPC] Failed to load sessions:', e);
+      console.error('[Matcher] Failed to load sessions:', e);
     }
   };
 
@@ -95,8 +95,8 @@ export default function URPCMatcher() {
   };
 
   const clearAllSessions = () => {
-    if (confirm('Clear all URPC sessions? This cannot be undone.')) {
-      const keys = Object.keys(localStorage).filter(k => k.startsWith('urpc_session_'));
+    if (confirm('Clear all catalog sessions? This cannot be undone.')) {
+      const keys = Object.keys(localStorage).filter(k => k.startsWith('matcher_session_'));
       keys.forEach(k => localStorage.removeItem(k));
       loadSessions();
     }
@@ -197,7 +197,7 @@ export default function URPCMatcher() {
       for (let i = 0; i < products.length; i += BATCH_SIZE) {
         // Check for cancel request
         if (cancelRequested) {
-          console.log('[URPC] Cancel requested, stopping...');
+          console.log('[Matcher] Cancel requested, stopping...');
           saveSession(allBatchResults, apiStats, false, 'Cancelled by user');
           alert(`Processing cancelled. ${allBatchResults.length} items were processed and saved to History.`);
           setFinalResults(allBatchResults);
@@ -225,7 +225,7 @@ export default function URPCMatcher() {
         const data = await response.json();
         
         if (data.databaseMissing) {
-          alert('⚠️ Database Not Available\n\nThe URPC database is not set up. Please use locally or contact admin.');
+          alert('Database Not Available\n\nThe catalog database is not set up. Please run locally or configure DATABASE_BLOB_URL.');
           setProcessing(false);
           return;
         }
@@ -395,7 +395,7 @@ export default function URPCMatcher() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'urpc_matched_results.csv';
+    a.download = 'matcher_matched_results.csv';
     a.click();
   };
 
@@ -412,10 +412,10 @@ export default function URPCMatcher() {
             <div>
               <h1 className="text-4xl font-bold text-gray-800 flex items-center gap-3">
                 <span className="text-3xl">🛒</span>
-                URPC Image Scraper
+                Catalog Matcher
               </h1>
               <p className="text-gray-600 mt-2">
-                Match products against 244K+ Alcohol & CnG database with AI verification
+                Match products against your alcohol and grocery catalog with AI verification
               </p>
             </div>
             <div className="flex gap-2">
@@ -540,13 +540,13 @@ export default function URPCMatcher() {
                       <label className="flex items-center gap-2 cursor-pointer">
                         <input
                           type="radio"
-                          value="cng"
-                          checked={productType === 'cng'}
-                          onChange={(e) => setProductType(e.target.value as 'cng')}
+                          value="grocery"
+                          checked={productType === 'grocery'}
+                          onChange={(e) => setProductType(e.target.value as 'grocery')}
                           className="w-4 h-4"
                         />
                         <span className="text-base font-medium flex items-center gap-1.5">
-                          <span className="text-xl">🍿</span> CnG
+                          <span className="text-xl">🍿</span> Grocery
                         </span>
                       </label>
                     </div>
@@ -797,7 +797,7 @@ export default function URPCMatcher() {
             onDelete={deleteSession}
             onClearAll={clearAllSessions}
             onClose={() => setShowHistory(false)}
-            toolName="URPC Matcher"
+            toolName="Catalog Matcher"
           />
         )}
       </div>
